@@ -15,6 +15,11 @@ interface QualityProfile {
   shadows: boolean;
 }
 
+interface CameraProfile {
+  position: [number, number, number];
+  fov: number;
+}
+
 function supportsWebGL2() {
   const canvas = document.createElement('canvas');
   return Boolean(canvas.getContext('webgl2'));
@@ -75,6 +80,13 @@ export function AdaptiveScene() {
     () => resolveQuality(gpu, isMobileViewport, reducedMotion),
     [gpu, isMobileViewport, reducedMotion],
   );
+  const camera = useMemo<CameraProfile>(() => {
+    if (isMobileViewport) {
+      return { position: [0, 0, 9.4], fov: 56 };
+    }
+
+    return { position: [0, 0.2, 7.2], fov: 48 };
+  }, [isMobileViewport]);
 
   if (!webglReady) {
     return <div aria-hidden className="scene-fallback" />;
@@ -87,9 +99,9 @@ export function AdaptiveScene() {
           dpr={quality.dpr}
           shadows={quality.shadows}
           gl={{ antialias: quality.antialias, alpha: true, powerPreference: 'high-performance' }}
-          camera={{ position: [0, 0.2, 7.2], fov: 48 }}
+          camera={camera}
         >
-          <FuturisticScene quality={quality.mode} />
+          <FuturisticScene quality={quality.mode} isMobile={isMobileViewport} />
         </Canvas>
       </Suspense>
     </div>

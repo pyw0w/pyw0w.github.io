@@ -211,15 +211,12 @@ main {
   color: var(--text-muted);
 }
 
-.reveal {
-  opacity: 0;
-  transform: translateY(26px);
-  transition: opacity 0.55s ease, transform 0.55s ease;
-}
-
-.reveal.is-visible {
-  opacity: 1;
-  transform: translateY(0);
+.gsap-section,
+.project-card,
+.experience-item,
+.skill-card,
+.scene-layer {
+  will-change: transform, opacity;
 }
 
 .projects-toolbar {

@@ -7,6 +7,7 @@ export type SceneQuality = 'cinematic' | 'balanced' | 'light';
 
 interface FuturisticSceneProps {
   quality: SceneQuality;
+  isMobile: boolean;
 }
 
 interface QualityConfig {
@@ -37,7 +38,15 @@ const QUALITY_CONFIG: Record<SceneQuality, QualityConfig> = {
   },
 };
 
-function OrbitingRings({ count }: { count: number }) {
+function OrbitingRings({
+  count,
+  scale,
+  motionRange,
+}: {
+  count: number;
+  scale: number;
+  motionRange: number;
+}) {
   const groups = useRef<Group[]>([]);
 
   useFrame((state, delta) => {
@@ -49,7 +58,7 @@ function OrbitingRings({ count }: { count: number }) {
       const direction = index % 2 === 0 ? 1 : -1;
       group.rotation.y += delta * 0.26 * direction;
       group.rotation.x += delta * 0.12 * direction;
-      group.position.x = Math.sin(state.clock.elapsedTime * (0.3 + index * 0.1)) * 0.25;
+      group.position.x = Math.sin(state.clock.elapsedTime * (0.3 + index * 0.1)) * motionRange;
     });
   });
 
@@ -66,7 +75,7 @@ function OrbitingRings({ count }: { count: number }) {
           rotation={[Math.PI / (2.2 + index), index * 0.7, Math.PI / 4]}
         >
           <mesh>
-            <torusGeometry args={[1.9 + index * 0.4, 0.03, 28, 220]} />
+            <torusGeometry args={[(1.9 + index * 0.4) * scale, 0.03 * scale, 28, 220]} />
             <meshStandardMaterial
               color={index % 2 === 0 ? '#58c4ff' : '#1affb5'}
               emissive={index % 2 === 0 ? '#173f7a' : '#0a5a4d'}
@@ -83,10 +92,13 @@ function OrbitingRings({ count }: { count: number }) {
   );
 }
 
-export default function FuturisticScene({ quality }: FuturisticSceneProps) {
+export default function FuturisticScene({ quality, isMobile }: FuturisticSceneProps) {
   const coreRef = useRef<Mesh>(null);
   const haloRef = useRef<Mesh>(null);
   const config = QUALITY_CONFIG[quality];
+  const sceneScale = isMobile ? 0.72 : 1;
+  const pointerScale = isMobile ? 0.62 : 1;
+  const sparklesScale: [number, number, number] = isMobile ? [8, 6, 6] : [12, 8, 8];
 
   const sparklesColor = useMemo(() => {
     if (quality === 'cinematic') {
@@ -108,8 +120,8 @@ export default function FuturisticScene({ quality }: FuturisticSceneProps) {
       core.rotation.x += delta * 0.2;
       core.rotation.y += delta * 0.35;
 
-      const pointerX = state.pointer.x * 0.45;
-      const pointerY = state.pointer.y * 0.2;
+      const pointerX = state.pointer.x * 0.45 * pointerScale;
+      const pointerY = state.pointer.y * 0.2 * pointerScale;
       core.position.x += (pointerX - core.position.x) * 0.04;
       core.position.y += (pointerY - core.position.y) * 0.04;
     }
@@ -130,41 +142,47 @@ export default function FuturisticScene({ quality }: FuturisticSceneProps) {
       <pointLight position={[4, 3, 3]} intensity={35} color="#4dd4ff" />
       <pointLight position={[-3, -2, 4]} intensity={20} color="#00f7b5" />
 
-      <Float speed={1.2} rotationIntensity={0.45} floatIntensity={0.8}>
-        <mesh ref={coreRef} castShadow>
-          <icosahedronGeometry args={[1.2, config.icosahedronDetail]} />
+      <group position={[0, isMobile ? -0.1 : 0.05, 0]} scale={sceneScale}>
+        <Float speed={1.2} rotationIntensity={0.45} floatIntensity={0.8}>
+          <mesh ref={coreRef} castShadow>
+            <icosahedronGeometry args={[1.2, config.icosahedronDetail]} />
+            <meshStandardMaterial
+              color="#77d6ff"
+              emissive="#0f4f9b"
+              emissiveIntensity={1.1}
+              roughness={0.22}
+              metalness={0.78}
+              wireframe={quality === 'light'}
+            />
+          </mesh>
+        </Float>
+
+        <mesh ref={haloRef} rotation={[Math.PI / 3, 0, 0]}>
+          <torusGeometry args={[2.35, 0.08, 20, 180]} />
           <meshStandardMaterial
-            color="#77d6ff"
-            emissive="#0f4f9b"
-            emissiveIntensity={1.1}
-            roughness={0.22}
-            metalness={0.78}
-            wireframe={quality === 'light'}
+            color="#b7f0ff"
+            emissive="#166f9f"
+            emissiveIntensity={0.7}
+            roughness={0.2}
+            metalness={0.9}
+            transparent
+            opacity={0.7}
           />
         </mesh>
-      </Float>
 
-      <mesh ref={haloRef} rotation={[Math.PI / 3, 0, 0]}>
-        <torusGeometry args={[2.35, 0.08, 20, 180]} />
-        <meshStandardMaterial
-          color="#b7f0ff"
-          emissive="#166f9f"
-          emissiveIntensity={0.7}
-          roughness={0.2}
-          metalness={0.9}
-          transparent
-          opacity={0.7}
+        <OrbitingRings
+          count={config.ringCount}
+          scale={isMobile ? 0.78 : 1}
+          motionRange={isMobile ? 0.16 : 0.25}
         />
-      </mesh>
-
-      <OrbitingRings count={config.ringCount} />
+      </group>
 
       <Sparkles
         count={config.sparklesCount}
         size={config.sparklesSize}
         color={sparklesColor}
         speed={0.35}
-        scale={[12, 8, 8]}
+        scale={sparklesScale}
         noise={2.2}
       />
     </>

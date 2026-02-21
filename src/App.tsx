@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ProjectCard } from './components/ProjectCard';
 import { ProjectModal } from './components/ProjectModal';
 import { AdaptiveScene } from './components/scene/AdaptiveScene';
 import { RevealSection } from './components/ui/RevealSection';
 import projectsCache from './data/cache/projects.json';
 import { EXPERIENCE_ITEMS, PROFILE, SKILL_GROUPS } from './data/profile';
+import { useGsapDesign } from './hooks/useGsapDesign';
 import {
   PROJECT_CATEGORIES,
   type Project,
@@ -24,6 +25,7 @@ function sortByUpdatedDesc(items: Project[]) {
 }
 
 function App() {
+  const appRef = useRef<HTMLDivElement | null>(null);
   const cache = projectsCache as ProjectsCache;
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>(ALL_CATEGORY);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -44,9 +46,10 @@ function App() {
     : EXPERIENCE_ITEMS.slice(0, EXPERIENCE_PREVIEW_COUNT);
 
   const filters: CategoryFilter[] = [ALL_CATEGORY, ...PROJECT_CATEGORIES];
+  useGsapDesign(appRef, [activeCategory, visibleProjects.length, showAllExperience]);
 
   return (
-    <div className="app-shell">
+    <div ref={appRef} className="app-shell">
       <AdaptiveScene />
 
       <header className="site-header">
@@ -63,7 +66,7 @@ function App() {
 
       <main id="top">
         <section className="hero section">
-          <div className="hero-content reveal is-visible">
+          <div className="hero-content">
             <p className="eyebrow">Личный инфо-сайт</p>
             <h1>{PROFILE.title}</h1>
             <p>{PROFILE.summary}</p>
