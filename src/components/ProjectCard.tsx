@@ -12,7 +12,7 @@ const STATUS_LABEL: Record<Project['status'], string> = {
 
 export function ProjectCard({ project, onOpen }: ProjectCardProps) {
   return (
-    <button type="button" className="project-card" onClick={() => onOpen(project)}>
+    <button type="button" className="project-card panel-chrome" onClick={() => onOpen(project)}>
       <div className="project-card-top">
         <h3>{project.name}</h3>
         <span className={`status-tag ${project.status}`}>{STATUS_LABEL[project.status]}</span>
@@ -29,7 +29,7 @@ export function ProjectCard({ project, onOpen }: ProjectCardProps) {
       </div>
 
       <div className="tag-row tech-row">
-        {project.techStack.slice(0, 4).map((tech) => (
+        {project.techStack.slice(0, 5).map((tech) => (
           <span key={`${project.id}-${tech}`} className="chip tech">
             {tech}
           </span>
@@ -37,7 +37,7 @@ export function ProjectCard({ project, onOpen }: ProjectCardProps) {
       </div>
 
       <div className="project-card-footer">
-        <span>Обновлено: {new Date(project.updatedAt).toLocaleDateString('ru-RU')}</span>
+        <span>updated {new Date(project.updatedAt).toLocaleDateString('ru-RU')}</span>
         <span>⭐ {project.stars}</span>
       </div>
     </button>

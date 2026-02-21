@@ -1,10 +1,10 @@
-import { RefObject, useLayoutEffect } from 'react';
+import { RefObject, useEffect, useLayoutEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
 
-export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, deps: ReadonlyArray<unknown>) {
+export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, refreshDeps: ReadonlyArray<unknown>) {
   useLayoutEffect(() => {
     const scope = scopeRef.current;
     if (!scope) {
@@ -16,64 +16,58 @@ export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, deps: Rea
       return;
     }
 
-    const isMobile = window.matchMedia('(max-width: 920px)').matches;
-
     const ctx = gsap.context(() => {
       const intro = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
       intro
-        .from('.site-header', { y: -22, opacity: 0, duration: 0.6 })
-        .from('.hero .eyebrow', { y: 12, opacity: 0, duration: 0.42 }, '-=0.25')
-        .from('.hero h1', { y: 20, opacity: 0, duration: 0.62 }, '-=0.2')
-        .from('.hero p', { y: 16, opacity: 0, duration: 0.52 }, '-=0.38')
-        .from('.hero-actions > *', { y: 14, opacity: 0, duration: 0.4, stagger: 0.08 }, '-=0.3');
+        .from('.site-header', { y: -22, autoAlpha: 0, duration: 0.55 })
+        .from('.hero .eyebrow', { y: 10, autoAlpha: 0, duration: 0.4 }, '-=0.2')
+        .from('.hero h1', { y: 18, autoAlpha: 0, duration: 0.6 }, '-=0.18')
+        .from('.hero-lead', { y: 14, autoAlpha: 0, duration: 0.5 }, '-=0.32')
+        .from('.hero-actions > *', { y: 12, autoAlpha: 0, duration: 0.35, stagger: 0.08 }, '-=0.3')
+        .from('.stat-tile', { y: 12, autoAlpha: 0, duration: 0.35, stagger: 0.07 }, '-=0.25')
+        .from('.hero-signal', { x: 22, autoAlpha: 0, duration: 0.5 }, '-=0.45');
 
       gsap.utils.toArray<HTMLElement>('.gsap-section').forEach((section) => {
         gsap.from(section, {
-          y: 34,
-          opacity: 0,
-          duration: 0.72,
+          y: 30,
+          autoAlpha: 0,
+          duration: 0.6,
           ease: 'power2.out',
           scrollTrigger: {
             trigger: section,
-            start: 'top 80%',
-            toggleActions: 'play none none reverse',
+            start: 'top 84%',
+            once: true,
           },
         });
       });
 
-      gsap.utils.toArray<HTMLElement>('.project-card, .experience-item, .skill-card').forEach((item, index) => {
-        gsap.from(item, {
-          y: 18,
-          opacity: 0,
-          duration: 0.52,
-          delay: (index % 8) * 0.03,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: item,
-            start: 'top 88%',
-            toggleActions: 'play none none reverse',
-          },
-        });
-      });
+      const items = gsap.utils.toArray<HTMLElement>(
+        '.project-card, .experience-step, .skill-card, .contact-panel',
+      );
 
-      gsap.to('.scene-layer', {
-        yPercent: isMobile ? -2 : -6,
-        scale: isMobile ? 1.02 : 1.07,
-        ease: 'none',
-        scrollTrigger: {
-          trigger: 'main',
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: 0.7,
+      ScrollTrigger.batch(items, {
+        start: 'top 90%',
+        once: true,
+        onEnter: (batch) => {
+          gsap.from(batch, {
+            y: 16,
+            autoAlpha: 0,
+            duration: 0.45,
+            stagger: 0.06,
+            ease: 'power2.out',
+            overwrite: 'auto',
+          });
         },
       });
     }, scope);
 
-    ScrollTrigger.refresh();
-
     return () => {
       ctx.revert();
     };
-  }, deps);
+  }, [scopeRef]);
+
+  useEffect(() => {
+    ScrollTrigger.refresh();
+  }, refreshDeps);
 }

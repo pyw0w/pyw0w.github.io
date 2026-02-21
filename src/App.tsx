@@ -46,13 +46,31 @@ function App() {
     : EXPERIENCE_ITEMS.slice(0, EXPERIENCE_PREVIEW_COUNT);
 
   const filters: CategoryFilter[] = [ALL_CATEGORY, ...PROJECT_CATEGORIES];
+
+  const activeProjectsCount = useMemo(
+    () => projects.filter((project) => project.status === 'active').length,
+    [projects],
+  );
+
+  const keyStacks = useMemo(
+    () => Array.from(new Set(projects.flatMap((project) => project.techStack))).slice(0, 8),
+    [projects],
+  );
+
+  const newestUpdate = projects[0]
+    ? new Date(projects[0].updatedAt).toLocaleDateString('ru-RU')
+    : 'нет данных';
+
   useGsapDesign(appRef, [activeCategory, visibleProjects.length, showAllExperience]);
 
   return (
     <div ref={appRef} className="app-shell">
       <AdaptiveScene />
+      <div className="ambient-orb orb-a" aria-hidden />
+      <div className="ambient-orb orb-b" aria-hidden />
+      <div className="ambient-lines" aria-hidden />
 
-      <header className="site-header">
+      <header className="site-header panel-chrome">
         <a className="logo" href="#top">
           {PROFILE.name}
         </a>
@@ -65,26 +83,61 @@ function App() {
       </header>
 
       <main id="top">
-        <section className="hero section">
-          <div className="hero-content">
-            <p className="eyebrow">Личный инфо-сайт</p>
-            <h1>{PROFILE.title}</h1>
-            <p>{PROFILE.summary}</p>
-            <div className="hero-actions">
-              <a className="button-link primary" href="#projects">
-                Смотреть проекты
-              </a>
-              <a className="button-link" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
-                GitHub
-              </a>
+        <section className="hero section panel-chrome">
+          <div className="hero-grid">
+            <div className="hero-copy">
+              <p className="eyebrow">Digital Presence / 2026</p>
+              <h1>{PROFILE.title}</h1>
+              <p className="hero-lead">{PROFILE.summary}</p>
+
+              <div className="hero-actions">
+                <a className="button-link primary" href="#projects">
+                  Смотреть проекты
+                </a>
+                <a className="button-link" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
+                  GitHub
+                </a>
+              </div>
+
+              <div className="hero-stats">
+                <article className="stat-tile panel-chrome">
+                  <span>Всего проектов</span>
+                  <strong>{projects.length}</strong>
+                </article>
+                <article className="stat-tile panel-chrome">
+                  <span>Активных</span>
+                  <strong>{activeProjectsCount}</strong>
+                </article>
+                <article className="stat-tile panel-chrome">
+                  <span>Последний апдейт</span>
+                  <strong>{newestUpdate}</strong>
+                </article>
+              </div>
             </div>
+
+            <aside className="hero-signal panel-chrome">
+              <p className="signal-label">Signal Board</p>
+              <h3>Current Focus</h3>
+              <p>
+                Современные UI, интерактивные интерфейсы и продуктовые решения с инженерной дисциплиной.
+              </p>
+              <div className="tag-row">
+                {keyStacks.length === 0
+                  ? '—'
+                  : keyStacks.map((stack) => (
+                      <span key={`stack-${stack}`} className="chip tech">
+                        {stack}
+                      </span>
+                    ))}
+              </div>
+            </aside>
           </div>
         </section>
 
         <RevealSection
           id="projects"
           title="Проекты"
-          subtitle="Автоматически синхронизируются из GitHub API и сортируются по последнему обновлению"
+          subtitle="Автоматическая витрина из GitHub API с фильтрацией, статусами и модалками"
         >
           <div className="projects-toolbar">
             <div className="chip-list">
@@ -99,11 +152,15 @@ function App() {
                 </button>
               ))}
             </div>
-            <p className="meta-text">Показано проектов: {visibleProjects.length}</p>
+
+            <div className="toolbar-meta panel-chrome">
+              <span>Показано: {visibleProjects.length}</span>
+              <span>Сортировка: last updated</span>
+            </div>
           </div>
 
           {visibleProjects.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state panel-chrome">
               <h3>Пока нет проектов в локальном кэше</h3>
               <p>
                 Запусти синк из GitHub API (`npm run sync:projects`) или дождись CI-синхронизации на
@@ -122,20 +179,23 @@ function App() {
         <RevealSection
           id="experience"
           title="Опыт"
-          subtitle="Фокус на ролях и достижениях с приоритетом реального impact"
+          subtitle="Роли и достижения, где дизайн и разработка работают как единая система"
         >
           <div className="experience-list">
-            {visibleExperience.map((item) => (
-              <article key={`${item.title}-${item.period}`} className="experience-item">
-                <div className="experience-head">
-                  <h3>{item.title}</h3>
-                  <span>{item.period}</span>
+            {visibleExperience.map((item, index) => (
+              <article key={`${item.title}-${item.period}`} className="experience-step panel-chrome">
+                <span className="step-index">{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <div className="experience-head">
+                    <h3>{item.title}</h3>
+                    <span>{item.period}</span>
+                  </div>
+                  <ul>
+                    {item.highlights.map((highlight) => (
+                      <li key={`${item.title}-${highlight}`}>{highlight}</li>
+                    ))}
+                  </ul>
                 </div>
-                <ul>
-                  {item.highlights.map((highlight) => (
-                    <li key={`${item.title}-${highlight}`}>{highlight}</li>
-                  ))}
-                </ul>
               </article>
             ))}
           </div>
@@ -143,7 +203,7 @@ function App() {
           {EXPERIENCE_ITEMS.length > EXPERIENCE_PREVIEW_COUNT ? (
             <button
               type="button"
-              className="button-link"
+              className="button-link expand-button"
               onClick={() => setShowAllExperience((prev) => !prev)}
             >
               {showAllExperience ? 'Скрыть часть опыта' : 'Показать еще'}
@@ -151,11 +211,14 @@ function App() {
           ) : null}
         </RevealSection>
 
-        <RevealSection id="skills" title="Навыки" subtitle="Сгруппированы по ключевым направлениям">
+        <RevealSection id="skills" title="Навыки" subtitle="Ключевые направления, стек и практики реализации">
           <div className="skills-grid">
             {SKILL_GROUPS.map((group) => (
-              <article key={group.category} className="skill-card">
-                <h3>{group.category}</h3>
+              <article key={group.category} className="skill-card panel-chrome">
+                <div className="skill-head">
+                  <h3>{group.category}</h3>
+                  <span>{group.skills.length} items</span>
+                </div>
                 <div className="tag-row">
                   {group.skills.map((skill) => (
                     <span key={`${group.category}-${skill}`} className="chip tech">
@@ -171,17 +234,20 @@ function App() {
         <RevealSection
           id="contacts"
           title="Контакты"
-          subtitle="Для связи и просмотра полного списка проектов"
+          subtitle="Основной канал связи и полный список публичных репозиториев"
         >
-          <a className="button-link primary" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
-            Перейти в GitHub
-          </a>
+          <div className="contact-panel panel-chrome">
+            <p>Открыт к общению, коллаборациям и техническому обсуждению проектов.</p>
+            <a className="button-link primary" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
+              Перейти в GitHub
+            </a>
+          </div>
         </RevealSection>
       </main>
 
       <footer className="site-footer">
         <p>
-          Кэш проектов: {new Date(cache.generatedAt).toLocaleString('ru-RU')} ({cache.source})
+          Cache timestamp: {new Date(cache.generatedAt).toLocaleString('ru-RU')} · source: {cache.source}
         </p>
       </footer>
 
