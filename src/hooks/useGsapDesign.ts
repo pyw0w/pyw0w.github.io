@@ -20,19 +20,19 @@ export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, refreshDe
       const intro = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
       intro
-        .from('.site-header', { y: -22, autoAlpha: 0, duration: 0.55 })
-        .from('.hero .eyebrow', { y: 10, autoAlpha: 0, duration: 0.4 }, '-=0.2')
-        .from('.hero h1', { y: 18, autoAlpha: 0, duration: 0.6 }, '-=0.18')
-        .from('.hero-lead', { y: 14, autoAlpha: 0, duration: 0.5 }, '-=0.32')
-        .from('.hero-actions > *', { y: 12, autoAlpha: 0, duration: 0.35, stagger: 0.08 }, '-=0.3')
-        .from('.stat-tile', { y: 12, autoAlpha: 0, duration: 0.35, stagger: 0.07 }, '-=0.25')
-        .from('.hero-signal', { x: 22, autoAlpha: 0, duration: 0.5 }, '-=0.45');
+        .from('.site-header', { y: -24, autoAlpha: 0, duration: 0.6 })
+        .from('.hero-kicker', { y: 12, autoAlpha: 0, duration: 0.35 }, '-=0.28')
+        .from('.hero-title-line', { yPercent: 100, autoAlpha: 0, duration: 0.7 }, '-=0.06')
+        .from('.hero-summary', { y: 18, autoAlpha: 0, duration: 0.5 }, '-=0.36')
+        .from('.hero-actions > *', { y: 16, autoAlpha: 0, duration: 0.4, stagger: 0.08 }, '-=0.26')
+        .from('.metric-card', { y: 16, autoAlpha: 0, duration: 0.4, stagger: 0.07 }, '-=0.28')
+        .from('.hero-note', { x: 28, autoAlpha: 0, duration: 0.6 }, '-=0.5');
 
-      gsap.utils.toArray<HTMLElement>('.gsap-section').forEach((section) => {
+      gsap.utils.toArray<HTMLElement>('.reveal-section').forEach((section) => {
         gsap.from(section, {
-          y: 30,
+          y: 42,
           autoAlpha: 0,
-          duration: 0.6,
+          duration: 0.7,
           ease: 'power2.out',
           scrollTrigger: {
             trigger: section,
@@ -43,7 +43,7 @@ export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, refreshDe
       });
 
       const items = gsap.utils.toArray<HTMLElement>(
-        '.project-card, .experience-step, .skill-card, .contact-panel',
+        '.principle-card, .case-card, .experience-card, .skill-cluster, .archive-card, .contact-card',
       );
 
       ScrollTrigger.batch(items, {
@@ -51,9 +51,9 @@ export function useGsapDesign(scopeRef: RefObject<HTMLElement | null>, refreshDe
         once: true,
         onEnter: (batch) => {
           gsap.from(batch, {
-            y: 16,
+            y: 18,
             autoAlpha: 0,
-            duration: 0.45,
+            duration: 0.5,
             stagger: 0.06,
             ease: 'power2.out',
             overwrite: 'auto',

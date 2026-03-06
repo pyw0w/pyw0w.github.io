@@ -41,3 +41,34 @@ export interface SkillGroup {
   category: string;
   skills: string[];
 }
+
+export interface Principle {
+  title: string;
+  description: string;
+}
+
+export interface FeaturedCase {
+  slug: string;
+  category: string;
+  title: string;
+  summary: string;
+  outcome: string;
+  role: string;
+  year: string;
+  techStack: string[];
+  links: Array<{
+    label: string;
+    href: string;
+  }>;
+}
+
+export interface HeroMetric {
+  label: string;
+  value: string;
+}
+
+export interface ContactLink {
+  label: string;
+  href: string;
+  note: string;
+}
