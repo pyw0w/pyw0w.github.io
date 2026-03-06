@@ -1,5 +1,152 @@
 {
-  "generatedAt": "1970-01-01T00:00:00.000Z",
-  "source": "cache",
-  "projects": []
+  "generatedAt": "2026-03-06T18:27:36.770Z",
+  "source": "github-api",
+  "projects": [
+    {
+      "id": 1163580365,
+      "name": "pyw0w.github.io",
+      "description": "Публичный репозиторий с фокусом на TypeScript. Подробности раскрываются через код и историю изменений.",
+      "techStack": [
+        "TypeScript"
+      ],
+      "categories": [
+        "Frontend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/pyw0w.github.io",
+      "status": "active",
+      "updatedAt": "2026-03-06T18:22:42Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 1117556393,
+      "name": "AniDocs",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/AniDocs",
+      "status": "active",
+      "updatedAt": "2026-01-04T00:02:12Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 1118344675,
+      "name": "Striming-Kodik",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/Striming-Kodik",
+      "status": "active",
+      "updatedAt": "2025-12-17T16:04:24Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 1117485281,
+      "name": "AniRuntime",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/AniRuntime",
+      "status": "active",
+      "updatedAt": "2025-12-16T11:32:25Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 1117485180,
+      "name": "AniCore",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/AniCore",
+      "status": "active",
+      "updatedAt": "2025-12-16T11:32:13Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 1117484434,
+      "name": "AniApi",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/AniApi",
+      "status": "active",
+      "updatedAt": "2025-12-16T11:30:51Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 566783504,
+      "name": "pyw0w",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/pyw0w",
+      "status": "active",
+      "updatedAt": "2025-12-05T13:54:39Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 746939364,
+      "name": "OpenHud",
+      "description": "Публичный репозиторий с фокусом на Lua. Подробности раскрываются через код и историю изменений.",
+      "techStack": [
+        "Lua"
+      ],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/OpenHud",
+      "status": "maintenance",
+      "updatedAt": "2025-07-16T11:03:09Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 856267325,
+      "name": "MiniCore.Web",
+      "description": "Публичный репозиторий с фокусом на CSS. Подробности раскрываются через код и историю изменений.",
+      "techStack": [
+        "CSS"
+      ],
+      "categories": [
+        "Frontend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/MiniCore.Web",
+      "status": "maintenance",
+      "updatedAt": "2024-09-12T10:05:48Z",
+      "stars": 0,
+      "topics": []
+    },
+    {
+      "id": 773036696,
+      "name": "MiniCore.BugTrucker",
+      "description": "Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.",
+      "techStack": [],
+      "categories": [
+        "Backend"
+      ],
+      "repoUrl": "https://github.com/pyw0w/MiniCore.BugTrucker",
+      "status": "maintenance",
+      "updatedAt": "2024-03-16T15:13:09Z",
+      "stars": 0,
+      "topics": []
+    }
+  ]
 }

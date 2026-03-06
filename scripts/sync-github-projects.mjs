@@ -134,6 +134,23 @@ function deriveTechStack(repo) {
   return unique([...language, ...inferred]);
 }
 
+function deriveDescription(repo) {
+  const explicitDescription = (repo.description ?? '').trim();
+  if (explicitDescription) {
+    return explicitDescription;
+  }
+
+  const language = repo.language ? titleCase(repo.language) : null;
+  const topics = (repo.topics ?? []).map(normalizeTopic).slice(0, 3).map(titleCase);
+  const techHint = unique([...(language ? [language] : []), ...topics]).slice(0, 3);
+
+  if (techHint.length > 0) {
+    return `Публичный репозиторий с фокусом на ${techHint.join(', ')}. Подробности раскрываются через код и историю изменений.`;
+  }
+
+  return 'Публичный репозиторий без заполненного описания. Детали можно посмотреть в исходном коде и истории коммитов.';
+}
+
 function deriveStatus(repo) {
   const updatedAtMs = new Date(repo.pushed_at ?? repo.updated_at).getTime();
   const ageDays = (Date.now() - updatedAtMs) / (1000 * 60 * 60 * 24);
@@ -248,11 +265,10 @@ async function main() {
     const projects = response.repos
       .filter((repo) => !repo.fork)
       .filter((repo) => !repo.archived)
-      .filter((repo) => Boolean((repo.description ?? '').trim()))
       .map((repo) => ({
         id: repo.id,
         name: repo.name,
-        description: repo.description.trim(),
+        description: deriveDescription(repo),
         techStack: deriveTechStack(repo),
         categories: deriveCategories(repo),
         repoUrl: repo.html_url,
