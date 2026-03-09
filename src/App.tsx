@@ -5,6 +5,7 @@ import { BrandHero } from './components/sections/BrandHero';
 import { ContactSection } from './components/sections/ContactSection';
 import { ExpertiseSection } from './components/sections/ExpertiseSection';
 import { FeaturedCasesSection } from './components/sections/FeaturedCasesSection';
+import { MobileMenu } from './components/ui/MobileMenu';
 import projectsCache from './data/cache/projects.json';
 import {
   CONTACT_LINKS,
@@ -46,15 +47,18 @@ function App() {
         <a className="logo" href="#top">
           {PROFILE.name}
         </a>
-        <nav>
+        <nav className="desktop-nav">
           <a href="#about">Подход</a>
           <a href="#cases">Кейсы</a>
           <a href="#archive">Архив</a>
           <a href="#contact">Контакт</a>
         </nav>
-        <a className="header-cta" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
-          GitHub
-        </a>
+        <div className="header-end">
+          <a className="header-cta" href={PROFILE.githubUrl} target="_blank" rel="noreferrer">
+            GitHub
+          </a>
+          <MobileMenu githubUrl={PROFILE.githubUrl} />
+        </div>
       </header>
 
       <main>
