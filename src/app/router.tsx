@@ -1,7 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './layout/AppLayout';
 import { HomePage } from '../features/home/HomePage';
-import { BrowsePage } from '../features/browse/BrowsePage';
 import { SearchPage } from '../features/search/SearchPage';
 import { FavoritesPage } from '../features/favorites/FavoritesPage';
 import { HistoryPage } from '../features/history/HistoryPage';
@@ -17,10 +16,6 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <HomePage />,
-      },
-      {
-        path: 'browse',
-        element: <BrowsePage />,
       },
       {
         path: 'search',

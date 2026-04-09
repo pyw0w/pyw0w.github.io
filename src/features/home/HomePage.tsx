@@ -52,7 +52,7 @@ export function HomePage() {
               <Button component={RouterLink} to={titlePath(hero)} size="large">
                 Смотреть тайтл
               </Button>
-              <Button component={RouterLink} to="/browse" size="large" variant="outlined">
+              <Button component={RouterLink} to="/search" size="large" variant="outlined">
                 Открыть каталог
               </Button>
             </Stack>

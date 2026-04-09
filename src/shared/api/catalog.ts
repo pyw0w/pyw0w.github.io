@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type {
-  BrowseParams,
-  BrowseResult,
+  CatalogParams,
+  CatalogResult,
   CatalogSnapshot,
   CatalogTitle,
   PlaylistEpisode,
@@ -125,7 +125,7 @@ function matchesSearch(title: CatalogTitle, search: string): boolean {
   return title.searchText.includes(search.toLowerCase().trim());
 }
 
-function matchesFilters(title: CatalogTitle, params: BrowseParams): boolean {
+function matchesFilters(title: CatalogTitle, params: CatalogParams): boolean {
   if (params.genre && !title.genres.includes(params.genre)) return false;
   if (params.status && title.status !== params.status) return false;
   if (params.year && title.year !== params.year) return false;
@@ -133,7 +133,7 @@ function matchesFilters(title: CatalogTitle, params: BrowseParams): boolean {
   return true;
 }
 
-function sortTitles(items: CatalogTitle[], sort: BrowseParams['sort']): CatalogTitle[] {
+function sortTitles(items: CatalogTitle[], sort: CatalogParams['sort']): CatalogTitle[] {
   const copy = [...items];
   if (sort === 'trending') {
     return copy.sort((left, right) => right.trendingScore - left.trendingScore);
@@ -144,7 +144,7 @@ function sortTitles(items: CatalogTitle[], sort: BrowseParams['sort']): CatalogT
   return copy.sort((left, right) => left.latestRank - right.latestRank);
 }
 
-export async function getBrowseResults(params: BrowseParams): Promise<BrowseResult> {
+export async function getCatalogResults(params: CatalogParams): Promise<CatalogResult> {
   const snapshot = await getCatalogSnapshot();
   const filtered = sortTitles(
     snapshot.items.filter((title) => matchesSearch(title, params.search) && matchesFilters(title, params)),

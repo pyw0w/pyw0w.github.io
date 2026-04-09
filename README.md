@@ -23,12 +23,11 @@ npm run build
 
 ## Что есть в v1
 - Home с hero, новинками и трендами
-- Browse с фильтрами и сортировкой
-- Search
+- Search как единый каталог с фильтрами и сортировкой
 - Favorites
 - History
 - Страница тайтла с плеером и эпизодами
 - Prerender и `404.html` fallback для GitHub Pages
 
 ## Деплой
-Проект настроен на деплой через GitHub Actions в GitHub Pages (`.github/workflows/deploy-pages.yml`).
+Проект настроен на деплой через GitHub Actions в GitHub Pages (`.github/workflows/deploy-pages.yml`). Snapshot каталога пересобирается при каждом деплое и по расписанию каждый день в 00:00 по Москве.
