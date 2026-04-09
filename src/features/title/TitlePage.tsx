@@ -8,10 +8,12 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -71,8 +73,16 @@ export function TitlePage() {
   useEffect(() => {
     if (!playlistQuery.data || !detailQuery.data) return;
     const saved = getSelectedEpisode(detailQuery.data.id);
+    const hasSavedEpisode = saved
+      ? playlistQuery.data.some((episode) => episode.id === saved)
+      : false;
     const fallback = playlistQuery.data[0]?.id ?? null;
-    setSelectedEpisodeState(saved ?? fallback);
+    const nextEpisode = hasSavedEpisode ? saved : fallback;
+    setSelectedEpisodeState(nextEpisode);
+
+    if (!hasSavedEpisode && nextEpisode) {
+      setSelectedEpisode(detailQuery.data.id, nextEpisode);
+    }
   }, [detailQuery.data, playlistQuery.data]);
 
   const currentEpisode = useMemo(
@@ -140,23 +150,34 @@ export function TitlePage() {
                 <CardContent>
                   <Stack spacing={2}>
                     <Typography variant="h6">Эпизоды</Typography>
-                    <ToggleButtonGroup
-                      color="primary"
-                      value={selectedEpisode}
-                      exclusive
-                      onChange={(_event, value) => {
-                        if (!value || !detailQuery.data) return;
-                        setSelectedEpisodeState(value);
-                        setSelectedEpisode(detailQuery.data.id, value);
-                      }}
-                      sx={{ flexWrap: 'wrap', gap: 1, justifyContent: 'flex-start' }}
-                    >
-                      {playlistQuery.data.map((episode) => (
-                        <ToggleButton key={episode.id} value={episode.id} sx={{ borderRadius: 999 }}>
-                          {episode.name}
-                        </ToggleButton>
-                      ))}
-                    </ToggleButtonGroup>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="episode-select-label">Эпизод</InputLabel>
+                      <Select
+                        labelId="episode-select-label"
+                        label="Эпизод"
+                        value={currentEpisode?.id ?? ''}
+                        onChange={(event) => {
+                          if (!detailQuery.data) return;
+                          const value = event.target.value;
+                          if (!value) return;
+                          setSelectedEpisodeState(value);
+                          setSelectedEpisode(detailQuery.data.id, value);
+                        }}
+                        MenuProps={{
+                          PaperProps: {
+                            sx: {
+                              maxHeight: 360,
+                            },
+                          },
+                        }}
+                      >
+                        {playlistQuery.data.map((episode) => (
+                          <MenuItem key={episode.id} value={episode.id}>
+                            {episode.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Stack>
                 </CardContent>
               </Card>
