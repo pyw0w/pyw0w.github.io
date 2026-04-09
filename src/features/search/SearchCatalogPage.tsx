@@ -25,6 +25,7 @@ import { getCatalogResults, getCatalogSnapshot } from '../../shared/api/catalog'
 import { trackEvent } from '../../shared/analytics/events';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
+import { EmptyState } from '../../shared/ui/EmptyState';
 
 const DEFAULT_CATALOG_PARAMS: CatalogParams = {
   page: 1,
@@ -336,7 +337,7 @@ export function SearchCatalogPage({
             {resultsQuery.data && resultsQuery.data.items.length > 0 ? (
               <TitleGrid titles={resultsQuery.data.items} />
             ) : (
-              emptyState ?? <Alert severity="info">По текущим фильтрам ничего не найдено.</Alert>
+              emptyState ?? <EmptyState title="Ничего не найдено" description="Измените запрос или ослабьте фильтры, чтобы увидеть больше тайтлов из каталога." />
             )}
 
             {(resultsQuery.data?.pageCount ?? 1) > 1 ? (
