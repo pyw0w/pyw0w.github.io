@@ -1,7 +1,7 @@
-import { Alert } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
+import { EmptyState } from '../../shared/ui/EmptyState';
 import { getCatalogSnapshot } from '../../shared/api/catalog';
 import { getFavorites } from '../../shared/storage/local';
 
@@ -15,11 +15,17 @@ export function FavoritesPage() {
       title="Favorites"
       subtitle="Локальное избранное без аккаунтов, с возможностью потом заменить storage на синхронизируемый слой."
       isLoading={snapshotQuery.isLoading}
+      banner={snapshotQuery.isError ? <EmptyState title="Не удалось загрузить избранное" description="Каталог временно недоступен. Попробуйте обновить страницу позже." severity="warning" /> : undefined}
     >
       {titles.length > 0 ? (
         <TitleGrid titles={titles} />
       ) : (
-        <Alert severity="info">Пока ничего не добавлено в избранное.</Alert>
+        <EmptyState
+          title="Избранное пока пусто"
+          description="Откройте тайтл и добавьте его в избранное, чтобы быстро возвращаться к любимым релизам."
+          actionLabel="Открыть каталог"
+          actionTo="/search"
+        />
       )}
     </PageShell>
   );
