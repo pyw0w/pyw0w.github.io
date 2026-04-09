@@ -105,6 +105,21 @@ function computeTrendingScore(rating, votes) {
   return Number((average * Math.log10(safeVotes + 10)).toFixed(3));
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^0-9a-zа-яё]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildSearchText(parts) {
+  return normalizeSearchText(parts.filter(Boolean).join(' '));
+}
+
 function normalizeItem(rawItem, latestRank) {
   const parsed = parseTitleParts(rawItem.title);
   const episodeStats = parseEpisodeStats(parsed.episodeLabel);
@@ -150,10 +165,14 @@ function normalizeItem(rawItem, latestRank) {
     releasedEpisodes: episodeStats.releasedEpisodes,
     totalEpisodes: episodeStats.totalEpisodes,
     latestRank,
-    searchText: [parsed.title, parsed.originalTitle, genres.join(' '), rawItem.type, rawItem.year]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase(),
+    searchText: buildSearchText([
+      parsed.title,
+      parsed.originalTitle,
+      genres.join(' '),
+      rawItem.type,
+      rawItem.year,
+      plainDescription,
+    ]),
   };
 }
 

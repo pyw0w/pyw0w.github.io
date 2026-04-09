@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type {
+  CatalogFilters,
   CatalogParams,
   CatalogResult,
   CatalogSnapshot,
@@ -11,6 +12,25 @@ import type {
 
 const API_BASE = 'https://api.animetop.info/v1';
 const PAGE_SIZE = 24;
+const CATALOG_SORT_VALUES: CatalogParams['sort'][] = ['latest', 'trending', 'rating'];
+const STATUS_VALUES: TitleStatus[] = ['Анонс', 'Онгоинг', 'Завершено'];
+
+export const DEFAULT_CATALOG_PARAMS: CatalogParams = {
+  page: 1,
+  search: '',
+  genre: '',
+  status: '',
+  year: '',
+  type: '',
+  sort: 'latest',
+};
+
+export interface CatalogSearchData {
+  params: CatalogParams;
+  result: CatalogResult;
+  filters: CatalogFilters;
+  generatedAt: string;
+}
 
 const catalogTitleSchema = z.object({
   id: z.number(),
@@ -37,7 +57,7 @@ const catalogTitleSchema = z.object({
   releasedEpisodes: z.number().nullable(),
   totalEpisodes: z.number().nullable(),
   latestRank: z.number(),
-  searchText: z.string(),
+  searchText: z.string().transform((value) => normalizeSearchText(value)),
 });
 
 const catalogSnapshotSchema = z.object({
@@ -111,6 +131,91 @@ export function getBasePath(): string {
   return '';
 }
 
+function normalizeSearchText(value: string): string {
+  return String(value)
+    .toLowerCase()
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^0-9a-zа-яё]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeSearch(value: string): string[] {
+  const normalized = normalizeSearchText(value);
+  return normalized ? normalized.split(' ') : [];
+}
+
+function normalizeCatalogPage(value: CatalogParams['page'] | string | null | undefined): number {
+  const numeric = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(numeric)) return DEFAULT_CATALOG_PARAMS.page;
+  return Math.max(1, Math.trunc(numeric));
+}
+
+function normalizeCatalogFilterValue(value: string | null | undefined, allowedValues?: readonly string[]): string {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+  if (allowedValues && !allowedValues.includes(normalized)) return '';
+  return normalized;
+}
+
+interface CatalogParamsInput {
+  page?: CatalogParams['page'] | string | null;
+  search?: string | null;
+  genre?: string | null;
+  status?: string | null;
+  year?: string | null;
+  type?: string | null;
+  sort?: CatalogParams['sort'] | null;
+}
+
+export function normalizeCatalogParams(
+  params: CatalogParamsInput,
+  filters?: CatalogFilters,
+): CatalogParams {
+  const sort = CATALOG_SORT_VALUES.includes(params.sort ?? DEFAULT_CATALOG_PARAMS.sort)
+    ? (params.sort ?? DEFAULT_CATALOG_PARAMS.sort)
+    : DEFAULT_CATALOG_PARAMS.sort;
+
+  return {
+    page: normalizeCatalogPage(params.page),
+    search: normalizeSearchText(params.search ?? DEFAULT_CATALOG_PARAMS.search),
+    genre: normalizeCatalogFilterValue(params.genre, filters?.genres),
+    status: normalizeCatalogFilterValue(params.status, filters?.statuses ?? STATUS_VALUES),
+    year: normalizeCatalogFilterValue(params.year, filters?.years),
+    type: normalizeCatalogFilterValue(params.type, filters?.types),
+    sort,
+  };
+}
+
+export function parseCatalogSearchParams(searchParams: URLSearchParams, filters?: CatalogFilters): CatalogParams {
+  return normalizeCatalogParams({
+    page: searchParams.get('page'),
+    search: searchParams.get('q'),
+    genre: searchParams.get('genre'),
+    status: searchParams.get('status'),
+    year: searchParams.get('year'),
+    type: searchParams.get('type'),
+    sort: searchParams.get('sort') as CatalogParams['sort'] | null,
+  }, filters);
+}
+
+export function buildCatalogSearchParams(params: CatalogParams): URLSearchParams {
+  const normalized = normalizeCatalogParams(params);
+  const nextSearch = new URLSearchParams();
+
+  if (normalized.search) nextSearch.set('q', normalized.search);
+  if (normalized.genre) nextSearch.set('genre', normalized.genre);
+  if (normalized.status) nextSearch.set('status', normalized.status);
+  if (normalized.year) nextSearch.set('year', normalized.year);
+  if (normalized.type) nextSearch.set('type', normalized.type);
+  if (normalized.sort !== DEFAULT_CATALOG_PARAMS.sort) nextSearch.set('sort', normalized.sort);
+  if (normalized.page > DEFAULT_CATALOG_PARAMS.page) nextSearch.set('page', String(normalized.page));
+
+  return nextSearch;
+}
+
 export async function getCatalogSnapshot(): Promise<CatalogSnapshot> {
   if (!snapshotPromise) {
     snapshotPromise = fetch(`${getBasePath()}/data/catalog.json`)
@@ -141,9 +246,9 @@ export function selectHomeFeed(snapshot: CatalogSnapshot): HomeFeed {
   };
 }
 
-function matchesSearch(title: CatalogTitle, search: string): boolean {
-  if (!search) return true;
-  return title.searchText.includes(search.toLowerCase().trim());
+function matchesSearch(title: CatalogTitle, searchTokens: string[]): boolean {
+  if (searchTokens.length === 0) return true;
+  return searchTokens.every((token) => title.searchText.includes(token));
 }
 
 function matchesFilters(title: CatalogTitle, params: CatalogParams): boolean {
@@ -165,10 +270,10 @@ function sortTitles(items: CatalogTitle[], sort: CatalogParams['sort']): Catalog
   return copy.sort((left, right) => left.latestRank - right.latestRank);
 }
 
-export async function getCatalogResults(params: CatalogParams): Promise<CatalogResult> {
-  const snapshot = await getCatalogSnapshot();
+function selectCatalogResults(snapshot: CatalogSnapshot, params: CatalogParams): CatalogResult {
+  const searchTokens = tokenizeSearch(params.search);
   const filtered = sortTitles(
-    snapshot.items.filter((title) => matchesSearch(title, params.search) && matchesFilters(title, params)),
+    snapshot.items.filter((title) => matchesSearch(title, searchTokens) && matchesFilters(title, params)),
     params.sort,
   );
   const total = filtered.length;
@@ -182,6 +287,24 @@ export async function getCatalogResults(params: CatalogParams): Promise<CatalogR
     page,
     pageSize: PAGE_SIZE,
     pageCount,
+  };
+}
+
+export async function getCatalogResults(params: CatalogParams): Promise<CatalogResult> {
+  const snapshot = await getCatalogSnapshot();
+  const normalizedParams = normalizeCatalogParams(params, snapshot.filters);
+  return selectCatalogResults(snapshot, normalizedParams);
+}
+
+export async function getCatalogSearchData(params: CatalogParams): Promise<CatalogSearchData> {
+  const snapshot = await getCatalogSnapshot();
+  const normalizedParams = normalizeCatalogParams(params, snapshot.filters);
+
+  return {
+    params: normalizedParams,
+    result: selectCatalogResults(snapshot, normalizedParams),
+    filters: snapshot.filters,
+    generatedAt: snapshot.generatedAt,
   };
 }
 
