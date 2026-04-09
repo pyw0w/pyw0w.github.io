@@ -7,6 +7,7 @@ const HomePage = lazy(() => import('../features/home/HomePage').then((module) =>
 const SearchPage = lazy(() => import('../features/search/SearchPage').then((module) => ({ default: module.SearchPage })));
 const FavoritesPage = lazy(() => import('../features/favorites/FavoritesPage').then((module) => ({ default: module.FavoritesPage })));
 const HistoryPage = lazy(() => import('../features/history/HistoryPage').then((module) => ({ default: module.HistoryPage })));
+const ChangelogPage = lazy(() => import('../features/changelog/ChangelogPage').then((module) => ({ default: module.ChangelogPage })));
 const TitlePage = lazy(() => import('../features/title/TitlePage').then((module) => ({ default: module.TitlePage })));
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
@@ -43,6 +44,10 @@ export const router = createBrowserRouter([
       {
         path: 'history',
         element: renderLazyPage(HistoryPage),
+      },
+      {
+        path: 'changelog',
+        element: renderLazyPage(ChangelogPage),
       },
       {
         path: 'title/:slug',
