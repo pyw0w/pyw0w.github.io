@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import DOMPurify from 'dompurify';
 import {
   Alert,
   Box,
@@ -87,12 +86,7 @@ export function TitlePage() {
   }
 
   const isLoading = detailQuery.isLoading || playlistQuery.isLoading;
-  const descriptionHtml = detailQuery.data
-    ? DOMPurify.sanitize(sanitizeHtml(detailQuery.data.description), {
-        ALLOWED_TAGS: ['br', 'p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li'],
-        ALLOWED_ATTR: [],
-      })
-    : '';
+  const descriptionHtml = detailQuery.data ? sanitizeHtml(detailQuery.data.description) : '';
 
   return (
     <PageShell

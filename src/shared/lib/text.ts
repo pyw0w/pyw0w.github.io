@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 export function stripHtml(value: string): string {
   return value
     .replace(/<br\s*\/?>/gi, '\n')
@@ -7,10 +9,10 @@ export function stripHtml(value: string): string {
 }
 
 export function sanitizeHtml(value: string): string {
-  return value
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/ on\w+="[^"]*"/gi, '')
-    .replace(/ on\w+='[^']*'/gi, '');
+  return DOMPurify.sanitize(value, {
+    ALLOWED_TAGS: ['br', 'p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li'],
+    ALLOWED_ATTR: [],
+  });
 }
 
 export function formatScore(score: number): string {
