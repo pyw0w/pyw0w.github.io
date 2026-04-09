@@ -9,6 +9,8 @@ const outputPath = join(rootDir, 'public', 'data', 'catalog.json');
 const API_BASE = 'https://api.animetop.info/v1';
 const PAGE_SIZE = 40;
 const STATUS_VALUES = ['Анонс', 'Онгоинг', 'Завершено'];
+const TRENDING_MIN_VOTES = 50;
+const TRENDING_ONGOING_BOOST = 1.05;
 const CYRILLIC_MAP = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
   к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
@@ -96,13 +98,38 @@ function deriveStatus({ isAnnouncement, timer, releasedEpisodes, totalEpisodes, 
   return 'Завершено';
 }
 
-function computeTrendingScore(rating, votes) {
+function computeAverageScore(rating, votes) {
   const safeVotes = Number(votes) || 0;
   const safeRating = Number(rating) || 0;
   if (!safeVotes) return 0;
+  return Number(((safeRating / safeVotes) * 2).toFixed(1));
+}
 
-  const average = (safeRating / safeVotes) * 2;
-  return Number((average * Math.log10(safeVotes + 10)).toFixed(3));
+function buildTrendingContext(rawItems) {
+  const scoredItems = rawItems
+    .map((rawItem) => computeAverageScore(rawItem.rating, rawItem.votes))
+    .filter((score) => score > 0);
+
+  const globalMean = scoredItems.length > 0
+    ? scoredItems.reduce((total, score) => total + score, 0) / scoredItems.length
+    : 0;
+
+  return {
+    globalMean,
+    minVotes: TRENDING_MIN_VOTES,
+  };
+}
+
+function computeTrendingScore({ averageScore, votes, status }, trendingContext) {
+  const safeVotes = Number(votes) || 0;
+  if (!safeVotes || status === 'Анонс') return 0;
+
+  const weightedRating = ((safeVotes / (safeVotes + trendingContext.minVotes)) * averageScore)
+    + ((trendingContext.minVotes / (safeVotes + trendingContext.minVotes)) * trendingContext.globalMean);
+  const voteBoost = Math.log10(safeVotes + 1);
+  const statusBoost = status === 'Онгоинг' ? TRENDING_ONGOING_BOOST : 1;
+
+  return Number((weightedRating * voteBoost * statusBoost).toFixed(3));
 }
 
 function normalizeSearchText(value) {
@@ -120,7 +147,7 @@ function buildSearchText(parts) {
   return normalizeSearchText(parts.filter(Boolean).join(' '));
 }
 
-function normalizeItem(rawItem, latestRank) {
+function normalizeItem(rawItem, latestRank, trendingContext) {
   const parsed = parseTitleParts(rawItem.title);
   const episodeStats = parseEpisodeStats(parsed.episodeLabel);
   const plainDescription = stripHtml(rawItem.description);
@@ -130,7 +157,7 @@ function normalizeItem(rawItem, latestRank) {
     .filter(Boolean);
   const rating = Number(rawItem.rating) || 0;
   const votes = Number(rawItem.votes) || 0;
-  const averageScore = votes ? Number(((rating / votes) * 2).toFixed(1)) : 0;
+  const averageScore = computeAverageScore(rating, votes);
   const timer = Number(rawItem.timer) || 0;
   const status = deriveStatus({
     isAnnouncement: parsed.isAnnouncement,
@@ -139,6 +166,7 @@ function normalizeItem(rawItem, latestRank) {
     totalEpisodes: episodeStats.totalEpisodes,
     hasOpenEndedTotal: episodeStats.hasOpenEndedTotal,
   });
+  const trendingScore = computeTrendingScore({ averageScore, votes, status }, trendingContext);
 
   return {
     id: Number(rawItem.id),
@@ -158,7 +186,7 @@ function normalizeItem(rawItem, latestRank) {
     rating,
     votes,
     averageScore,
-    trendingScore: computeTrendingScore(rating, votes),
+    trendingScore,
     timer,
     isAnnouncement: parsed.isAnnouncement,
     status,
@@ -219,7 +247,8 @@ async function main() {
     uniqueItems.push(rawItem);
   }
 
-  const items = uniqueItems.map((rawItem, index) => normalizeItem(rawItem, index));
+  const trendingContext = buildTrendingContext(uniqueItems);
+  const items = uniqueItems.map((rawItem, index) => normalizeItem(rawItem, index, trendingContext));
   const filters = {
     genres: [...new Set(items.flatMap((item) => item.genres))].sort((left, right) => left.localeCompare(right, 'ru')),
     years: [...new Set(items.map((item) => item.year).filter(Boolean))].sort((left, right) => Number(right) - Number(left)),

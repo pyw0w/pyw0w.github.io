@@ -231,9 +231,16 @@ export async function getCatalogSnapshot(): Promise<CatalogSnapshot> {
   return snapshotPromise;
 }
 
+function compareTrending(left: CatalogTitle, right: CatalogTitle): number {
+  return right.trendingScore - left.trendingScore
+    || right.votes - left.votes
+    || right.averageScore - left.averageScore
+    || left.latestRank - right.latestRank;
+}
+
 function getTrendingTitlesSlice(items: CatalogTitle[], limit: number): CatalogTitle[] {
   return [...items]
-    .sort((left, right) => right.trendingScore - left.trendingScore)
+    .sort(compareTrending)
     .slice(0, limit);
 }
 
@@ -262,7 +269,7 @@ function matchesFilters(title: CatalogTitle, params: CatalogParams): boolean {
 function sortTitles(items: CatalogTitle[], sort: CatalogParams['sort']): CatalogTitle[] {
   const copy = [...items];
   if (sort === 'trending') {
-    return copy.sort((left, right) => right.trendingScore - left.trendingScore);
+    return copy.sort(compareTrending);
   }
   if (sort === 'rating') {
     return copy.sort((left, right) => right.averageScore - left.averageScore || right.votes - left.votes);
@@ -401,7 +408,7 @@ export async function getRelatedTitles(title: CatalogTitle, limit = 8): Promise<
       };
     })
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || right.item.trendingScore - left.item.trendingScore)
+    .sort((left, right) => right.score - left.score || compareTrending(left.item, right.item))
     .slice(0, limit)
     .map((entry) => entry.item);
 }
