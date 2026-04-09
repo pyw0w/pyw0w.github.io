@@ -8,6 +8,19 @@ const base = pagesRepo && pagesRepo !== `${process.env.GITHUB_ACTOR}.github.io` 
 export default defineConfig({
   base,
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
+          if (id.includes('@tanstack/react-query') || id.includes('zod')) return 'data';
+          if (id.includes('react-router') || id.includes('react') || id.includes('scheduler')) return 'react';
+          return 'vendor';
+        },
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 4173,
