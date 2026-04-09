@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Box,
   Button,
+  Chip,
   Drawer,
   FormControl,
   Grid,
@@ -17,6 +18,7 @@ import {
   Typography,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
+import CloseIcon from '@mui/icons-material/Close';
 import { useSearchParams } from 'react-router-dom';
 import type { CatalogParams } from '../../entities/catalog';
 import { getCatalogResults, getCatalogSnapshot } from '../../shared/api/catalog';
@@ -24,7 +26,29 @@ import { trackEvent } from '../../shared/analytics/events';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 
-function useCatalogParams(): [CatalogParams, (patch: Partial<CatalogParams>) => void] {
+const DEFAULT_CATALOG_PARAMS: CatalogParams = {
+  page: 1,
+  search: '',
+  genre: '',
+  status: '',
+  year: '',
+  type: '',
+  sort: 'latest',
+};
+
+function buildCatalogSearchParams(params: CatalogParams): URLSearchParams {
+  const nextSearch = new URLSearchParams();
+  if (params.search) nextSearch.set('q', params.search);
+  if (params.genre) nextSearch.set('genre', params.genre);
+  if (params.status) nextSearch.set('status', params.status);
+  if (params.year) nextSearch.set('year', params.year);
+  if (params.type) nextSearch.set('type', params.type);
+  if (params.sort !== 'latest') nextSearch.set('sort', params.sort);
+  if (params.page > 1) nextSearch.set('page', String(params.page));
+  return nextSearch;
+}
+
+function useCatalogParams(): [CatalogParams, (patch: Partial<CatalogParams>) => void, (next: CatalogParams) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const params: CatalogParams = {
@@ -37,23 +61,16 @@ function useCatalogParams(): [CatalogParams, (patch: Partial<CatalogParams>) => 
     sort: (searchParams.get('sort') as CatalogParams['sort']) || 'latest',
   };
 
-  function update(nextPatch: Partial<CatalogParams>) {
-    const next = { ...params, ...nextPatch };
-    const nextSearch = new URLSearchParams();
-
-    if (next.search) nextSearch.set('q', next.search);
-    if (next.genre) nextSearch.set('genre', next.genre);
-    if (next.status) nextSearch.set('status', next.status);
-    if (next.year) nextSearch.set('year', next.year);
-    if (next.type) nextSearch.set('type', next.type);
-    if (next.sort && next.sort !== 'latest') nextSearch.set('sort', next.sort);
-    if (next.page > 1) nextSearch.set('page', String(next.page));
-
-    setSearchParams(nextSearch, { replace: true });
-    trackEvent('filter_change', next);
+  function apply(next: CatalogParams) {
+    setSearchParams(buildCatalogSearchParams(next), { replace: true });
+    trackEvent('filter_change', { ...next });
   }
 
-  return [params, update];
+  function update(nextPatch: Partial<CatalogParams>) {
+    apply({ ...params, ...nextPatch });
+  }
+
+  return [params, update, apply];
 }
 
 interface FilterControlsProps {
@@ -63,6 +80,28 @@ interface FilterControlsProps {
   years: string[];
   types: string[];
   statuses: string[];
+}
+
+interface AppliedFilterChip {
+  key: keyof CatalogParams;
+  label: string;
+}
+
+function getActiveFiltersCount(params: CatalogParams): number {
+  return [params.search, params.genre, params.status, params.year, params.type, params.sort !== 'latest' ? params.sort : '']
+    .filter(Boolean)
+    .length;
+}
+
+function getAppliedFilterChips(params: CatalogParams): AppliedFilterChip[] {
+  return [
+    params.search ? { key: 'search', label: `Поиск: ${params.search}` } : null,
+    params.genre ? { key: 'genre', label: `Жанр: ${params.genre}` } : null,
+    params.status ? { key: 'status', label: `Статус: ${params.status}` } : null,
+    params.year ? { key: 'year', label: `Год: ${params.year}` } : null,
+    params.type ? { key: 'type', label: `Тип: ${params.type}` } : null,
+    params.sort !== 'latest' ? { key: 'sort', label: params.sort === 'trending' ? 'Сортировка: Тренд' : 'Сортировка: Рейтинг' } : null,
+  ].filter((value): value is AppliedFilterChip => Boolean(value));
 }
 
 function FilterControls({ params, updateParams, genres, years, types, statuses }: FilterControlsProps) {
@@ -172,18 +211,48 @@ export function SearchCatalogPage({
   subtitle = 'Единый каталог со стабильными фильтрами, сортировкой и URL-параметрами.',
   emptyState,
 }: SearchCatalogPageProps) {
-  const [params, updateParams] = useCatalogParams();
-  const [searchParams] = useSearchParams();
+  const [params, updateParams, applyParams] = useCatalogParams();
   const filtersQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
   const resultsQuery = useQuery({ queryKey: ['catalog', params], queryFn: () => getCatalogResults(params) });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [draftParams, setDraftParams] = useState<CatalogParams>(params);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    setDraftParams(params);
+  }, [mobileOpen, params]);
 
   const filters = filtersQuery.data?.filters;
-  const drawerContent = filters ? (
+  const activeFiltersCount = useMemo(() => getActiveFiltersCount(params), [params]);
+  const appliedFilterChips = useMemo(() => getAppliedFilterChips(params), [params]);
+
+  function updateDraftParams(patch: Partial<CatalogParams>) {
+    setDraftParams((current) => ({ ...current, ...patch }));
+  }
+
+  function resetDraftParams() {
+    setDraftParams(DEFAULT_CATALOG_PARAMS);
+  }
+
+  function applyDraftParams() {
+    applyParams({ ...draftParams, page: 1 });
+    setMobileOpen(false);
+  }
+
+  function clearAppliedFilter(key: keyof CatalogParams) {
+    const next = { ...params, [key]: DEFAULT_CATALOG_PARAMS[key], page: 1 } as CatalogParams;
+    updateParams(next);
+  }
+
+  function clearAllAppliedFilters() {
+    applyParams(DEFAULT_CATALOG_PARAMS);
+  }
+
+  const desktopFilters = filters ? (
     <Box sx={{ width: { xs: 320, md: 'auto' }, p: { xs: 2.5, md: 0 } }}>
       <FilterControls
         params={params}
-        updateParams={updateParams}
+        updateParams={(patch) => updateParams({ ...patch, page: 1 })}
         genres={filters.genres}
         years={filters.years}
         types={filters.types}
@@ -192,7 +261,34 @@ export function SearchCatalogPage({
     </Box>
   ) : null;
 
-  const activeFiltersCount = ['genre', 'status', 'year', 'type'].filter((key) => Boolean(searchParams.get(key))).length;
+  const mobileDrawerContent = filters ? (
+    <Box sx={{ width: 340, maxWidth: '100vw', p: 2.5, display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
+      <Stack spacing={1}>
+        <Typography variant="h6">Фильтры</Typography>
+        <Typography color="text.secondary">
+          Активно: {getActiveFiltersCount(draftParams)}
+        </Typography>
+      </Stack>
+
+      <FilterControls
+        params={draftParams}
+        updateParams={(patch) => updateDraftParams({ ...patch, page: 1 })}
+        genres={filters.genres}
+        years={filters.years}
+        types={filters.types}
+        statuses={filters.statuses}
+      />
+
+      <Stack direction="row" spacing={1.5} sx={{ mt: 'auto' }}>
+        <Button fullWidth variant="outlined" onClick={resetDraftParams}>
+          Сбросить
+        </Button>
+        <Button fullWidth variant="contained" onClick={applyDraftParams}>
+          Показать результаты
+        </Button>
+      </Stack>
+    </Box>
+  ) : null;
 
   return (
     <PageShell
@@ -203,7 +299,7 @@ export function SearchCatalogPage({
     >
       <Grid container spacing={3} alignItems="flex-start">
         <Grid size={{ xs: 12, md: 3 }} sx={{ display: { xs: 'none', md: 'block' } }}>
-          {drawerContent}
+          {desktopFilters}
         </Grid>
         <Grid size={{ xs: 12, md: 9 }}>
           <Stack spacing={3}>
@@ -220,6 +316,22 @@ export function SearchCatalogPage({
                 Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}
               </Button>
             </Stack>
+
+            {appliedFilterChips.length > 0 ? (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                {appliedFilterChips.map((chip) => (
+                  <Chip
+                    key={chip.key}
+                    label={chip.label}
+                    onDelete={() => clearAppliedFilter(chip.key)}
+                    deleteIcon={<CloseIcon />}
+                  />
+                ))}
+                <Button size="small" onClick={clearAllAppliedFilters}>
+                  Сбросить всё
+                </Button>
+              </Stack>
+            ) : null}
 
             {resultsQuery.data && resultsQuery.data.items.length > 0 ? (
               <TitleGrid titles={resultsQuery.data.items} />
@@ -245,7 +357,7 @@ export function SearchCatalogPage({
         onClose={() => setMobileOpen(false)}
         sx={{ display: { xs: 'block', md: 'none' } }}
       >
-        {drawerContent}
+        {mobileDrawerContent}
       </Drawer>
     </PageShell>
   );
