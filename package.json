@@ -1,0 +1,35 @@
+{
+  "name": "anime-vost-player-react",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "sync:catalog": "node scripts/sync-catalog.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev": "npm run sync:catalog && vite",
+    "prebuild": "npm run sync:catalog",
+    "build": "vite build && npm run postbuild:routes",
+    "postbuild:routes": "node scripts/postbuild-routes.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.4",
+    "@mui/material": "^7.3.4",
+    "@tanstack/react-query": "^5.90.3",
+    "dompurify": "^3.3.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.4",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10"
+  }
+}

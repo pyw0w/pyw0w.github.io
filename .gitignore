@@ -1,0 +1,8 @@
+thoughts
+node_modules
+.dist
+/dist
+.claude
+.agents
+skills-lock.json
+public/data/catalog.json
