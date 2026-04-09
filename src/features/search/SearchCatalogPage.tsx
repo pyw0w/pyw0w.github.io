@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -21,57 +21,47 @@ import TuneIcon from '@mui/icons-material/Tune';
 import CloseIcon from '@mui/icons-material/Close';
 import { useSearchParams } from 'react-router-dom';
 import type { CatalogParams } from '../../entities/catalog';
-import { getCatalogResults, getCatalogSnapshot } from '../../shared/api/catalog';
+import {
+  buildCatalogSearchParams,
+  DEFAULT_CATALOG_PARAMS,
+  getCatalogSearchData,
+  normalizeCatalogParams,
+  parseCatalogSearchParams,
+} from '../../shared/api/catalog';
 import { trackEvent } from '../../shared/analytics/events';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
 
-const DEFAULT_CATALOG_PARAMS: CatalogParams = {
-  page: 1,
-  search: '',
-  genre: '',
-  status: '',
-  year: '',
-  type: '',
-  sort: 'latest',
-};
-
-function buildCatalogSearchParams(params: CatalogParams): URLSearchParams {
-  const nextSearch = new URLSearchParams();
-  if (params.search) nextSearch.set('q', params.search);
-  if (params.genre) nextSearch.set('genre', params.genre);
-  if (params.status) nextSearch.set('status', params.status);
-  if (params.year) nextSearch.set('year', params.year);
-  if (params.type) nextSearch.set('type', params.type);
-  if (params.sort !== 'latest') nextSearch.set('sort', params.sort);
-  if (params.page > 1) nextSearch.set('page', String(params.page));
-  return nextSearch;
+interface CatalogParamsController {
+  params: CatalogParams;
+  queryString: string;
+  applyParams: (next: CatalogParams) => void;
+  replaceParams: (next: CatalogParams) => void;
+  updateParams: (patch: Partial<CatalogParams>) => void;
 }
 
-function useCatalogParams(): [CatalogParams, (patch: Partial<CatalogParams>) => void, (next: CatalogParams) => void] {
+function useCatalogParams(): CatalogParamsController {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const params: CatalogParams = {
-    page: Number.parseInt(searchParams.get('page') ?? '1', 10) || 1,
-    search: searchParams.get('q') ?? '',
-    genre: searchParams.get('genre') ?? '',
-    status: searchParams.get('status') ?? '',
-    year: searchParams.get('year') ?? '',
-    type: searchParams.get('type') ?? '',
-    sort: (searchParams.get('sort') as CatalogParams['sort']) || 'latest',
-  };
+  const params = useMemo(() => parseCatalogSearchParams(searchParams), [searchParams]);
+  const queryString = useMemo(() => buildCatalogSearchParams(params).toString(), [params]);
 
-  function apply(next: CatalogParams) {
+  const replaceParams = useCallback((next: CatalogParams) => {
     setSearchParams(buildCatalogSearchParams(next), { replace: true });
-    trackEvent('filter_change', { ...next });
-  }
+  }, [setSearchParams]);
 
-  function update(nextPatch: Partial<CatalogParams>) {
-    apply({ ...params, ...nextPatch });
-  }
+  const applyParams = useCallback((next: CatalogParams) => {
+    const normalized = normalizeCatalogParams(next);
+    setSearchParams(buildCatalogSearchParams(normalized), { replace: true });
+    trackEvent('filter_change', { ...normalized });
+  }, [setSearchParams]);
 
-  return [params, update, apply];
+  const updateParams = useCallback((patch: Partial<CatalogParams>) => {
+    applyParams({ ...params, ...patch });
+  }, [applyParams, params]);
+
+  return { params, queryString, applyParams, replaceParams, updateParams };
 }
 
 interface FilterControlsProps {
@@ -212,9 +202,11 @@ export function SearchCatalogPage({
   subtitle = 'Единый каталог со стабильными фильтрами, сортировкой и URL-параметрами.',
   emptyState,
 }: SearchCatalogPageProps) {
-  const [params, updateParams, applyParams] = useCatalogParams();
-  const filtersQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
-  const resultsQuery = useQuery({ queryKey: ['catalog', params], queryFn: () => getCatalogResults(params) });
+  const { params, queryString, applyParams, replaceParams, updateParams } = useCatalogParams();
+  const searchQuery = useQuery({
+    queryKey: ['catalogSearch', queryString],
+    queryFn: () => getCatalogSearchData(params),
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [draftParams, setDraftParams] = useState<CatalogParams>(params);
 
@@ -223,7 +215,15 @@ export function SearchCatalogPage({
     setDraftParams(params);
   }, [mobileOpen, params]);
 
-  const filters = filtersQuery.data?.filters;
+  useEffect(() => {
+    if (!searchQuery.data) return;
+    const canonicalQueryString = buildCatalogSearchParams(searchQuery.data.params).toString();
+    if (canonicalQueryString === queryString) return;
+    replaceParams(searchQuery.data.params);
+  }, [queryString, replaceParams, searchQuery.data]);
+
+  const filters = searchQuery.data?.filters;
+  const result = searchQuery.data?.result;
   const activeFiltersCount = useMemo(() => getActiveFiltersCount(params), [params]);
   const appliedFilterChips = useMemo(() => getAppliedFilterChips(params), [params]);
 
@@ -241,8 +241,7 @@ export function SearchCatalogPage({
   }
 
   function clearAppliedFilter(key: keyof CatalogParams) {
-    const next = { ...params, [key]: DEFAULT_CATALOG_PARAMS[key], page: 1 } as CatalogParams;
-    updateParams(next);
+    applyParams({ ...params, [key]: DEFAULT_CATALOG_PARAMS[key], page: 1 } as CatalogParams);
   }
 
   function clearAllAppliedFilters() {
@@ -295,8 +294,8 @@ export function SearchCatalogPage({
     <PageShell
       title={title}
       subtitle={subtitle}
-      isLoading={filtersQuery.isLoading || resultsQuery.isLoading}
-      banner={resultsQuery.isError ? <Alert severity="warning">Каталог временно недоступен.</Alert> : undefined}
+      isLoading={searchQuery.isLoading}
+      banner={searchQuery.isError ? <Alert severity="warning">Каталог временно недоступен.</Alert> : undefined}
     >
       <Grid container spacing={3} alignItems="flex-start">
         <Grid size={{ xs: 12, md: 3 }} sx={{ display: { xs: 'none', md: 'block' } }}>
@@ -305,9 +304,16 @@ export function SearchCatalogPage({
         <Grid size={{ xs: 12, md: 9 }}>
           <Stack spacing={3}>
             <Stack direction="row" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
-              <Typography color="text.secondary">
-                Найдено: {resultsQuery.data?.total ?? 0}
-              </Typography>
+              <Stack spacing={0.5}>
+                <Typography color="text.secondary">
+                  Найдено: {result?.total ?? 0}
+                </Typography>
+                {searchQuery.data ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Snapshot обновлён {new Date(searchQuery.data.generatedAt).toLocaleString('ru-RU')}
+                  </Typography>
+                ) : null}
+              </Stack>
               <Button
                 variant="outlined"
                 startIcon={<TuneIcon />}
@@ -334,16 +340,18 @@ export function SearchCatalogPage({
               </Stack>
             ) : null}
 
-            {resultsQuery.data && resultsQuery.data.items.length > 0 ? (
-              <TitleGrid titles={resultsQuery.data.items} />
-            ) : (
-              emptyState ?? <EmptyState title="Ничего не найдено" description="Измените запрос или ослабьте фильтры, чтобы увидеть больше тайтлов из каталога." />
-            )}
+            {result ? (
+              result.items.length > 0 ? (
+                <TitleGrid titles={result.items} />
+              ) : (
+                emptyState ?? <EmptyState title="Ничего не найдено" description="Измените запрос или ослабьте фильтры, чтобы увидеть больше тайтлов из каталога." />
+              )
+            ) : null}
 
-            {(resultsQuery.data?.pageCount ?? 1) > 1 ? (
+            {(result?.pageCount ?? 1) > 1 ? (
               <Pagination
-                count={resultsQuery.data?.pageCount ?? 1}
-                page={resultsQuery.data?.page ?? 1}
+                count={result?.pageCount ?? 1}
+                page={result?.page ?? 1}
                 onChange={(_event, page) => updateParams({ page })}
               />
             ) : null}
