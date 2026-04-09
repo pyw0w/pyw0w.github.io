@@ -114,6 +114,11 @@ export function TitlePage() {
 
   const isLoading = detailQuery.isLoading || playlistQuery.isLoading;
   const descriptionHtml = detailQuery.data ? sanitizeHtml(detailQuery.data.description) : '';
+  const metadataItems = detailQuery.data ? [
+    { label: 'Эпизоды', value: detailQuery.data.episodeLabel || '—' },
+    { label: 'Жанры', value: formatGenres(detailQuery.data.genres) || '—' },
+    { label: 'Режиссёр', value: detailQuery.data.director || '—' },
+  ] : [];
 
   return (
     <PageShell
@@ -132,28 +137,80 @@ export function TitlePage() {
       {detailQuery.data ? (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, lg: 8 }}>
-            <Card>
-              <Box sx={{ aspectRatio: '16 / 9', backgroundColor: 'common.black' }}>
+            <Card sx={{ overflow: 'hidden', boxShadow: '0 24px 80px rgba(0, 0, 0, 0.32)' }}>
+              <Box
+                sx={{
+                  position: 'relative',
+                  aspectRatio: '16 / 9',
+                  backgroundColor: 'common.black',
+                  backgroundImage: currentEpisode
+                    ? `linear-gradient(180deg, rgba(8,10,16,0.08) 0%, rgba(8,10,16,0.7) 100%), url(${currentEpisode.preview})`
+                    : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
                 {currentEpisode ? (
-                  <video
-                    key={currentEpisode.id}
-                    controls
-                    playsInline
-                    poster={currentEpisode.preview}
-                    style={{ width: '100%', height: '100%' }}
-                    onPlay={() =>
-                      trackEvent('playback_start', {
-                        titleId: detailQuery.data.id,
-                        episodeId: currentEpisode.id,
-                      })
-                    }
-                  >
-                    <source src={currentEpisode.hd} type="video/mp4" />
-                    <source src={currentEpisode.std} type="video/mp4" />
-                  </video>
+                  <>
+                    <Stack
+                      spacing={0.75}
+                      sx={{
+                        position: 'absolute',
+                        left: 16,
+                        bottom: 16,
+                        zIndex: 1,
+                        maxWidth: 'min(70%, 520px)',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <Typography variant="overline" sx={{ letterSpacing: 1.6, color: 'primary.light', fontWeight: 700 }}>
+                        Сейчас воспроизводится
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: 'common.white' }}>
+                        {currentEpisode.name}
+                      </Typography>
+                    </Stack>
+                    <video
+                      key={currentEpisode.id}
+                      controls
+                      playsInline
+                      poster={currentEpisode.preview}
+                      style={{ width: '100%', height: '100%' }}
+                      onPlay={() =>
+                        trackEvent('playback_start', {
+                          titleId: detailQuery.data.id,
+                          episodeId: currentEpisode.id,
+                        })
+                      }
+                    >
+                      <source src={currentEpisode.hd} type="video/mp4" />
+                      <source src={currentEpisode.std} type="video/mp4" />
+                    </video>
+                  </>
                 ) : (
-                  <Stack sx={{ width: '100%', height: '100%' }} alignItems="center" justifyContent="center">
-                    {playlistQuery.isLoading ? <CircularProgress /> : <Alert severity="info">Видео пока недоступно.</Alert>}
+                  <Stack
+                    spacing={1.5}
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      px: 3,
+                      textAlign: 'center',
+                      background: 'linear-gradient(180deg, rgba(8,10,16,0.55) 0%, rgba(8,10,16,0.82) 100%)',
+                    }}
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {playlistQuery.isLoading ? (
+                      <>
+                        <CircularProgress />
+                        <Typography color="grey.300">Подготавливаем video player…</Typography>
+                      </>
+                    ) : (
+                      <>
+                        <Typography variant="h6">Видео пока недоступно</Typography>
+                        <Typography color="text.secondary">Выберите другой тайтл позже или дождитесь обновления playlist.</Typography>
+                      </>
+                    )}
                   </Stack>
                 )}
               </Box>
@@ -227,7 +284,7 @@ export function TitlePage() {
             <Stack spacing={3}>
               <Card>
                 <CardContent>
-                  <Stack spacing={2}>
+                  <Stack spacing={2.5}>
                     <Box
                       component="img"
                       src={detailQuery.data.poster}
@@ -240,14 +297,24 @@ export function TitlePage() {
                       <Chip label={detailQuery.data.year} />
                       <Chip label={`★ ${formatScore(detailQuery.data.averageScore)}`} />
                     </Stack>
-                    <Typography variant="h4">{detailQuery.data.title}</Typography>
-                    {detailQuery.data.originalTitle ? (
-                      <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
-                    ) : null}
-                    <Typography color="text.secondary">{formatGenres(detailQuery.data.genres)}</Typography>
-                    {detailQuery.data.director ? (
-                      <Typography color="text.secondary">Режиссер: {detailQuery.data.director}</Typography>
-                    ) : null}
+                    <Stack spacing={0.75}>
+                      <Typography variant="h4">{detailQuery.data.title}</Typography>
+                      {detailQuery.data.originalTitle ? (
+                        <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
+                      ) : null}
+                    </Stack>
+                    <Stack spacing={1.25}>
+                      {metadataItems.map((item) => (
+                        <Stack key={item.label} direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+                          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 96 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography variant="body2" sx={{ textAlign: 'right', flex: 1 }}>
+                            {item.value}
+                          </Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
                     <Button
                       startIcon={favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                       onClick={() => {
