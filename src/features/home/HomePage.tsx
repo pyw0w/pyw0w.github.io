@@ -8,6 +8,7 @@ import { getHistory } from '../../shared/storage/local';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
+import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { titlePath } from '../../shared/lib/routes';
 import { formatGenres, formatScore } from '../../shared/lib/text';
 
@@ -35,10 +36,11 @@ export function HomePage() {
       isLoading={homeFeedQuery.isLoading}
       banner={
         homeFeedQuery.isError ? (
-          <Alert severity="warning">Не удалось обновить ленту. Попробуйте перезагрузить страницу.</Alert>
+          <Alert severity="warning">Не удалось собрать главную ленту из snapshot каталога. Попробуйте открыть Search или обновить страницу позже.</Alert>
         ) : undefined
       }
     >
+      <Stack spacing={3}>
       {hero ? (
         <Box
           sx={{
@@ -134,6 +136,9 @@ export function HomePage() {
             actionTo="/search"
           />
         )}
+      </Stack>
+
+      {snapshotQuery.data ? <CatalogFreshness generatedAt={snapshotQuery.data.generatedAt} /> : null}
       </Stack>
     </PageShell>
   );
