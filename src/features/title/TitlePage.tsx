@@ -89,6 +89,20 @@ export function TitlePage() {
     () => playlistQuery.data?.find((episode) => episode.id === selectedEpisode) ?? playlistQuery.data?.[0],
     [playlistQuery.data, selectedEpisode],
   );
+  const currentEpisodeIndex = useMemo(
+    () => (currentEpisode && playlistQuery.data
+      ? playlistQuery.data.findIndex((episode) => episode.id === currentEpisode.id)
+      : -1),
+    [currentEpisode, playlistQuery.data],
+  );
+  const previousEpisode = currentEpisodeIndex > 0 ? playlistQuery.data?.[currentEpisodeIndex - 1] ?? null : null;
+  const nextEpisode = currentEpisodeIndex >= 0 ? playlistQuery.data?.[currentEpisodeIndex + 1] ?? null : null;
+
+  function selectEpisode(episodeId: string) {
+    if (!detailQuery.data) return;
+    setSelectedEpisodeState(episodeId);
+    setSelectedEpisode(detailQuery.data.id, episodeId);
+  }
 
   if (!titleId) {
     return (
@@ -150,34 +164,59 @@ export function TitlePage() {
                 <CardContent>
                   <Stack spacing={2}>
                     <Typography variant="h6">Эпизоды</Typography>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="episode-select-label">Эпизод</InputLabel>
-                      <Select
-                        labelId="episode-select-label"
-                        label="Эпизод"
-                        value={currentEpisode?.id ?? ''}
-                        onChange={(event) => {
-                          if (!detailQuery.data) return;
-                          const value = event.target.value;
-                          if (!value) return;
-                          setSelectedEpisodeState(value);
-                          setSelectedEpisode(detailQuery.data.id, value);
-                        }}
-                        MenuProps={{
-                          PaperProps: {
-                            sx: {
-                              maxHeight: 360,
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="episode-select-label">Эпизод</InputLabel>
+                        <Select
+                          labelId="episode-select-label"
+                          label="Эпизод"
+                          value={currentEpisode?.id ?? ''}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (!value) return;
+                            selectEpisode(value);
+                          }}
+                          MenuProps={{
+                            PaperProps: {
+                              sx: {
+                                maxHeight: 360,
+                              },
                             },
-                          },
-                        }}
-                      >
-                        {playlistQuery.data.map((episode) => (
-                          <MenuItem key={episode.id} value={episode.id}>
-                            {episode.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                          }}
+                        >
+                          {playlistQuery.data.map((episode) => (
+                            <MenuItem key={episode.id} value={episode.id}>
+                              {episode.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                        <Button
+                          variant="outlined"
+                          disabled={!previousEpisode}
+                          onClick={() => {
+                            if (!previousEpisode) return;
+                            selectEpisode(previousEpisode.id);
+                          }}
+                          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+                        >
+                          Назад
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          disabled={!nextEpisode}
+                          onClick={() => {
+                            if (!nextEpisode) return;
+                            selectEpisode(nextEpisode.id);
+                          }}
+                          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+                        >
+                          Далее
+                        </Button>
+                      </Stack>
+                    </Stack>
                   </Stack>
                 </CardContent>
               </Card>
