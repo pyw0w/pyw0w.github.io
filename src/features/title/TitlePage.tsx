@@ -114,6 +114,11 @@ export function TitlePage() {
 
   const isLoading = detailQuery.isLoading || playlistQuery.isLoading;
   const descriptionHtml = detailQuery.data ? sanitizeHtml(detailQuery.data.description) : '';
+  const metadataItems = detailQuery.data ? [
+    { label: 'Эпизоды', value: detailQuery.data.episodeLabel || '—' },
+    { label: 'Жанры', value: formatGenres(detailQuery.data.genres) || '—' },
+    { label: 'Режиссёр', value: detailQuery.data.director || '—' },
+  ] : [];
 
   return (
     <PageShell
@@ -227,7 +232,7 @@ export function TitlePage() {
             <Stack spacing={3}>
               <Card>
                 <CardContent>
-                  <Stack spacing={2}>
+                  <Stack spacing={2.5}>
                     <Box
                       component="img"
                       src={detailQuery.data.poster}
@@ -240,14 +245,24 @@ export function TitlePage() {
                       <Chip label={detailQuery.data.year} />
                       <Chip label={`★ ${formatScore(detailQuery.data.averageScore)}`} />
                     </Stack>
-                    <Typography variant="h4">{detailQuery.data.title}</Typography>
-                    {detailQuery.data.originalTitle ? (
-                      <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
-                    ) : null}
-                    <Typography color="text.secondary">{formatGenres(detailQuery.data.genres)}</Typography>
-                    {detailQuery.data.director ? (
-                      <Typography color="text.secondary">Режиссер: {detailQuery.data.director}</Typography>
-                    ) : null}
+                    <Stack spacing={0.75}>
+                      <Typography variant="h4">{detailQuery.data.title}</Typography>
+                      {detailQuery.data.originalTitle ? (
+                        <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
+                      ) : null}
+                    </Stack>
+                    <Stack spacing={1.25}>
+                      {metadataItems.map((item) => (
+                        <Stack key={item.label} direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+                          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 96 }}>
+                            {item.label}
+                          </Typography>
+                          <Typography variant="body2" sx={{ textAlign: 'right', flex: 1 }}>
+                            {item.value}
+                          </Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
                     <Button
                       startIcon={favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                       onClick={() => {
