@@ -17,7 +17,6 @@ import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom';
 
 const navItems = [
   { label: 'Home', to: '/' },
-  { label: 'Browse', to: '/browse' },
   { label: 'Search', to: '/search' },
   { label: 'Favorites', to: '/favorites' },
   { label: 'History', to: '/history' },
@@ -28,7 +27,6 @@ export function AppLayout() {
   const location = useLocation();
 
   const activePath = useMemo(() => {
-    if (location.pathname.startsWith('/browse')) return '/browse';
     if (location.pathname.startsWith('/search')) return '/search';
     if (location.pathname.startsWith('/favorites')) return '/favorites';
     if (location.pathname.startsWith('/history')) return '/history';

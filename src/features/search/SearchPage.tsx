@@ -1,11 +1,11 @@
 import { Alert } from '@mui/material';
-import { BrowsePage } from '../browse/BrowsePage';
+import { SearchCatalogPage } from './SearchCatalogPage';
 
 export function SearchPage() {
   return (
-    <BrowsePage
+    <SearchCatalogPage
       title="Search"
-      subtitle="Расширенный поиск по каталогу с теми же фильтрами, что и в browse."
+      subtitle="Единый каталог с поиском, фильтрами, сортировкой и URL-параметрами."
       emptyState={<Alert severity="info">Введите запрос или выберите фильтры, чтобы найти тайтл.</Alert>}
     />
   );

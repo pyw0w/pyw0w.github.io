@@ -18,26 +18,26 @@ import {
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import { useSearchParams } from 'react-router-dom';
-import type { BrowseParams } from '../../entities/catalog';
-import { getBrowseResults, getCatalogSnapshot } from '../../shared/api/catalog';
+import type { CatalogParams } from '../../entities/catalog';
+import { getCatalogResults, getCatalogSnapshot } from '../../shared/api/catalog';
 import { trackEvent } from '../../shared/analytics/events';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 
-function useBrowseParams(): [BrowseParams, (patch: Partial<BrowseParams>) => void] {
+function useCatalogParams(): [CatalogParams, (patch: Partial<CatalogParams>) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const params: BrowseParams = {
+  const params: CatalogParams = {
     page: Number.parseInt(searchParams.get('page') ?? '1', 10) || 1,
     search: searchParams.get('q') ?? '',
     genre: searchParams.get('genre') ?? '',
     status: searchParams.get('status') ?? '',
     year: searchParams.get('year') ?? '',
     type: searchParams.get('type') ?? '',
-    sort: (searchParams.get('sort') as BrowseParams['sort']) || 'latest',
+    sort: (searchParams.get('sort') as CatalogParams['sort']) || 'latest',
   };
 
-  function update(nextPatch: Partial<BrowseParams>) {
+  function update(nextPatch: Partial<CatalogParams>) {
     const next = { ...params, ...nextPatch };
     const nextSearch = new URLSearchParams();
 
@@ -57,8 +57,8 @@ function useBrowseParams(): [BrowseParams, (patch: Partial<BrowseParams>) => voi
 }
 
 interface FilterControlsProps {
-  params: BrowseParams;
-  updateParams: (patch: Partial<BrowseParams>) => void;
+  params: CatalogParams;
+  updateParams: (patch: Partial<CatalogParams>) => void;
   genres: string[];
   years: string[];
   types: string[];
@@ -150,7 +150,7 @@ function FilterControls({ params, updateParams, genres, years, types, statuses }
           labelId="sort-label"
           label="Сортировка"
           value={params.sort}
-          onChange={(event) => updateParams({ sort: event.target.value as BrowseParams['sort'], page: 1 })}
+          onChange={(event) => updateParams({ sort: event.target.value as CatalogParams['sort'], page: 1 })}
         >
           <MenuItem value="latest">По новизне</MenuItem>
           <MenuItem value="trending">По тренду</MenuItem>
@@ -161,21 +161,21 @@ function FilterControls({ params, updateParams, genres, years, types, statuses }
   );
 }
 
-interface BrowsePageProps {
+interface SearchCatalogPageProps {
   title?: string;
   subtitle?: string;
   emptyState?: ReactNode;
 }
 
-export function BrowsePage({
-  title = 'Browse',
-  subtitle = 'Каталог со стабильными фильтрами, сортировкой и URL-параметрами как source of truth.',
+export function SearchCatalogPage({
+  title = 'Search',
+  subtitle = 'Единый каталог со стабильными фильтрами, сортировкой и URL-параметрами.',
   emptyState,
-}: BrowsePageProps) {
-  const [params, updateParams] = useBrowseParams();
+}: SearchCatalogPageProps) {
+  const [params, updateParams] = useCatalogParams();
   const [searchParams] = useSearchParams();
   const filtersQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
-  const resultsQuery = useQuery({ queryKey: ['browse', params], queryFn: () => getBrowseResults(params) });
+  const resultsQuery = useQuery({ queryKey: ['catalog', params], queryFn: () => getCatalogResults(params) });
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const filters = filtersQuery.data?.filters;
@@ -239,7 +239,7 @@ export function BrowsePage({
       </Grid>
 
       <Drawer
-        id="browse-mobile-drawer"
+        id="catalog-mobile-drawer"
         anchor="right"
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}

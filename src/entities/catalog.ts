@@ -54,7 +54,7 @@ export interface PlaylistEpisode {
   preview: string;
 }
 
-export interface BrowseParams {
+export interface CatalogParams {
   page: number;
   search: string;
   genre: string;
@@ -64,7 +64,7 @@ export interface BrowseParams {
   sort: 'latest' | 'trending' | 'rating';
 }
 
-export interface BrowseResult {
+export interface CatalogResult {
   items: CatalogTitle[];
   total: number;
   page: number;
