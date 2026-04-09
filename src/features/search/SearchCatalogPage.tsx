@@ -32,6 +32,7 @@ import { trackEvent } from '../../shared/analytics/events';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
+import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 
 interface CatalogParamsController {
   params: CatalogParams;
@@ -295,79 +296,76 @@ export function SearchCatalogPage({
       title={title}
       subtitle={subtitle}
       isLoading={searchQuery.isLoading}
-      banner={searchQuery.isError ? <Alert severity="warning">Каталог временно недоступен.</Alert> : undefined}
+      banner={searchQuery.isError ? <Alert severity="warning">Не удалось загрузить snapshot каталога. Поиск временно недоступен, пока сайт не получит свежую сборку данных.</Alert> : undefined}
     >
-      <Grid container spacing={3} alignItems="flex-start">
-        <Grid size={{ xs: 12, md: 3 }} sx={{ display: { xs: 'none', md: 'block' } }}>
-          {desktopFilters}
-        </Grid>
-        <Grid size={{ xs: 12, md: 9 }}>
-          <Stack spacing={3}>
-            <Stack direction="row" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
-              <Stack spacing={0.5}>
+      <Stack spacing={3}>
+        <Grid container spacing={3} alignItems="flex-start">
+          <Grid size={{ xs: 12, md: 3 }} sx={{ display: { xs: 'none', md: 'block' } }}>
+            {desktopFilters}
+          </Grid>
+          <Grid size={{ xs: 12, md: 9 }}>
+            <Stack spacing={3}>
+              <Stack direction="row" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
                 <Typography color="text.secondary">
                   Найдено: {result?.total ?? 0}
                 </Typography>
-                {searchQuery.data ? (
-                  <Typography variant="caption" color="text.secondary">
-                    Snapshot обновлён {new Date(searchQuery.data.generatedAt).toLocaleString('ru-RU')}
-                  </Typography>
-                ) : null}
-              </Stack>
-              <Button
-                variant="outlined"
-                startIcon={<TuneIcon />}
-                sx={{ display: { xs: 'inline-flex', md: 'none' } }}
-                onClick={() => setMobileOpen(true)}
-              >
-                Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}
-              </Button>
-            </Stack>
-
-            {appliedFilterChips.length > 0 ? (
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-                {appliedFilterChips.map((chip) => (
-                  <Chip
-                    key={chip.key}
-                    label={chip.label}
-                    onDelete={() => clearAppliedFilter(chip.key)}
-                    deleteIcon={<CloseIcon />}
-                  />
-                ))}
-                <Button size="small" onClick={clearAllAppliedFilters}>
-                  Сбросить всё
+                <Button
+                  variant="outlined"
+                  startIcon={<TuneIcon />}
+                  sx={{ display: { xs: 'inline-flex', md: 'none' } }}
+                  onClick={() => setMobileOpen(true)}
+                >
+                  Фильтры{activeFiltersCount ? ` (${activeFiltersCount})` : ''}
                 </Button>
               </Stack>
-            ) : null}
 
-            {result ? (
-              result.items.length > 0 ? (
-                <TitleGrid titles={result.items} />
-              ) : (
-                emptyState ?? <EmptyState title="Ничего не найдено" description="Измените запрос или ослабьте фильтры, чтобы увидеть больше тайтлов из каталога." />
-              )
-            ) : null}
+              {appliedFilterChips.length > 0 ? (
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                  {appliedFilterChips.map((chip) => (
+                    <Chip
+                      key={chip.key}
+                      label={chip.label}
+                      onDelete={() => clearAppliedFilter(chip.key)}
+                      deleteIcon={<CloseIcon />}
+                    />
+                  ))}
+                  <Button size="small" onClick={clearAllAppliedFilters}>
+                    Сбросить всё
+                  </Button>
+                </Stack>
+              ) : null}
 
-            {(result?.pageCount ?? 1) > 1 ? (
-              <Pagination
-                count={result?.pageCount ?? 1}
-                page={result?.page ?? 1}
-                onChange={(_event, page) => updateParams({ page })}
-              />
-            ) : null}
-          </Stack>
+              {result ? (
+                result.items.length > 0 ? (
+                  <TitleGrid titles={result.items} />
+                ) : (
+                  emptyState ?? <EmptyState title="Ничего не найдено" description="Измените запрос или ослабьте фильтры, чтобы увидеть больше тайтлов из каталога." />
+                )
+              ) : null}
+
+              {(result?.pageCount ?? 1) > 1 ? (
+                <Pagination
+                  count={result?.pageCount ?? 1}
+                  page={result?.page ?? 1}
+                  onChange={(_event, page) => updateParams({ page })}
+                />
+              ) : null}
+            </Stack>
+          </Grid>
         </Grid>
-      </Grid>
 
-      <Drawer
-        id="catalog-mobile-drawer"
-        anchor="right"
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        sx={{ display: { xs: 'block', md: 'none' } }}
-      >
-        {mobileDrawerContent}
-      </Drawer>
+        <Drawer
+          id="catalog-mobile-drawer"
+          anchor="right"
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          sx={{ display: { xs: 'block', md: 'none' } }}
+        >
+          {mobileDrawerContent}
+        </Drawer>
+
+        {searchQuery.data ? <CatalogFreshness generatedAt={searchQuery.data.generatedAt} /> : null}
+      </Stack>
     </PageShell>
   );
 }

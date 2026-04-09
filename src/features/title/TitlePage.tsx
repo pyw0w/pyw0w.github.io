@@ -17,12 +17,13 @@ import {
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { useParams } from 'react-router-dom';
-import { getPlaylist, getRelatedTitles, getTitleDetail } from '../../shared/api/catalog';
+import { getCatalogSnapshot, getPlaylist, getRelatedTitles, getTitleDetail } from '../../shared/api/catalog';
 import { trackEvent } from '../../shared/analytics/events';
 import { formatGenres, formatScore, sanitizeHtml } from '../../shared/lib/text';
 import { getSelectedEpisode, isFavorite, pushHistory, setSelectedEpisode, toggleFavorite } from '../../shared/storage/local';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
+import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { parseTitleRouteParam } from '../../shared/lib/routes';
 
 export function TitlePage() {
@@ -30,6 +31,8 @@ export function TitlePage() {
   const titleId = parseTitleRouteParam(params.slug);
   const [selectedEpisode, setSelectedEpisodeState] = useState<string | null>(null);
   const [favorite, setFavorite] = useState(false);
+
+  const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
 
   const detailQuery = useQuery({
     queryKey: ['title', titleId],
@@ -95,12 +98,13 @@ export function TitlePage() {
       isLoading={isLoading}
       banner={
         detailQuery.isError ? (
-          <Alert severity="error">Не удалось загрузить страницу тайтла.</Alert>
+          <Alert severity="error">Не удалось загрузить snapshot карточки тайтла. Проверьте каталог позже или откройте Search для перехода к другим релизам.</Alert>
         ) : playlistQuery.isError ? (
-          <Alert severity="warning">Описание доступно, но playlist сейчас не загрузился.</Alert>
+          <Alert severity="warning">Карточка тайтла доступна, но playlist сейчас не загрузился. Попробуйте обновить страницу позже.</Alert>
         ) : undefined
       }
     >
+      <Stack spacing={3}>
       {detailQuery.data ? (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, lg: 8 }}>
@@ -217,6 +221,9 @@ export function TitlePage() {
           <TitleGrid titles={relatedQuery.data} />
         </Stack>
       ) : null}
+
+      {snapshotQuery.data ? <CatalogFreshness generatedAt={snapshotQuery.data.generatedAt} /> : null}
+      </Stack>
     </PageShell>
   );
 }
