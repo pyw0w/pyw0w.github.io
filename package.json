@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "sync:catalog": "node scripts/sync-catalog.mjs",
+    "generate:changelog": "node scripts/generate-changelog.mjs",
     "typecheck": "tsc --noEmit",
-    "dev": "npm run sync:catalog && vite",
-    "prebuild": "npm run sync:catalog",
+    "dev": "npm run sync:catalog && npm run generate:changelog && vite",
+    "prebuild": "npm run sync:catalog && npm run generate:changelog",
     "build": "vite build && npm run postbuild:routes",
     "postbuild:routes": "node scripts/postbuild-routes.mjs",
     "preview": "vite preview"

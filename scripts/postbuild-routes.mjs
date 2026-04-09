@@ -30,6 +30,7 @@ async function buildStaticShellRoutes(template) {
     ['search', 'Search — AV Player', 'Единый каталог аниме с поиском, фильтрами и сортировкой.'],
     ['favorites', 'Favorites — AV Player', 'Локальное избранное без аккаунтов.'],
     ['history', 'History — AV Player', 'Недавно открытые тайтлы в локальной истории браузера.'],
+    ['changelog', 'Changelog — AV Player', 'Версия сайта и последние изменения из git-репозитория.'],
   ];
 
   await Promise.all(
