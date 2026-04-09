@@ -238,6 +238,88 @@ function compareTrending(left: CatalogTitle, right: CatalogTitle): number {
     || left.latestRank - right.latestRank;
 }
 
+function getOverlapRatio(left: string[], right: string[]): number {
+  const leftSet = new Set(left.filter(Boolean));
+  const rightSet = new Set(right.filter(Boolean));
+  if (leftSet.size === 0 || rightSet.size === 0) return 0;
+
+  let overlap = 0;
+  leftSet.forEach((value) => {
+    if (rightSet.has(value)) overlap += 1;
+  });
+
+  return overlap / Math.max(leftSet.size, rightSet.size);
+}
+
+function getTokenOverlapRatio(left: string, right: string): number {
+  const leftTokens = tokenizeSearch(left);
+  const rightTokens = tokenizeSearch(right);
+  return getOverlapRatio(leftTokens, rightTokens);
+}
+
+function getYearProximityScore(left: string, right: string): number {
+  const leftYear = Number.parseInt(left, 10);
+  const rightYear = Number.parseInt(right, 10);
+  if (!Number.isFinite(leftYear) || !Number.isFinite(rightYear)) return 0;
+
+  const distance = Math.abs(leftYear - rightYear);
+  if (distance === 0) return 1;
+  if (distance === 1) return 0.75;
+  if (distance <= 3) return 0.4;
+  return 0;
+}
+
+function getEpisodeShapeScore(left: CatalogTitle, right: CatalogTitle): number {
+  const leftReleased = left.releasedEpisodes ?? left.totalEpisodes;
+  const rightReleased = right.releasedEpisodes ?? right.totalEpisodes;
+  if (leftReleased === null || rightReleased === null) return 0;
+
+  const releasedDistance = Math.abs(leftReleased - rightReleased);
+  if (releasedDistance === 0) return 1;
+  if (releasedDistance <= 3) return 0.65;
+  if (releasedDistance <= 8) return 0.3;
+  return 0;
+}
+
+function getScoreAffinity(left: CatalogTitle, right: CatalogTitle): number {
+  if (!left.averageScore || !right.averageScore) return 0;
+  const distance = Math.abs(left.averageScore - right.averageScore);
+  if (distance <= 0.3) return 1;
+  if (distance <= 0.7) return 0.6;
+  if (distance <= 1.2) return 0.3;
+  return 0;
+}
+
+function getRelatedCandidateScore(base: CatalogTitle, candidate: CatalogTitle): number {
+  const genreScore = getOverlapRatio(base.genres, candidate.genres);
+  const titleScore = Math.max(
+    getTokenOverlapRatio(`${base.title} ${base.originalTitle}`, `${candidate.title} ${candidate.originalTitle}`),
+    getTokenOverlapRatio(base.fullTitle, candidate.fullTitle),
+  );
+  const badgeScore = getOverlapRatio(base.badges, candidate.badges);
+  const descriptionScore = getTokenOverlapRatio(base.shortDescription, candidate.shortDescription);
+  const yearScore = getYearProximityScore(base.year, candidate.year);
+  const episodeScore = getEpisodeShapeScore(base, candidate);
+  const scoreAffinity = getScoreAffinity(base, candidate);
+  const sameType = base.type && candidate.type && base.type === candidate.type ? 1 : 0;
+  const sameStatus = base.status === candidate.status ? 1 : 0;
+  const sameDirector = base.director && candidate.director && base.director === candidate.director ? 1 : 0;
+  const meaningfulSignal = genreScore > 0 || titleScore > 0 || sameType > 0 || sameDirector > 0 || yearScore >= 0.75;
+
+  if (!meaningfulSignal) return 0;
+
+  return (genreScore * 40)
+    + (titleScore * 30)
+    + (sameType * 12)
+    + (yearScore * 10)
+    + (sameDirector * 8)
+    + (sameStatus * 6)
+    + (episodeScore * 6)
+    + (badgeScore * 4)
+    + (scoreAffinity * 4)
+    + (descriptionScore * 2);
+}
+
 function getTrendingTitlesSlice(items: CatalogTitle[], limit: number): CatalogTitle[] {
   return [...items]
     .sort(compareTrending)
@@ -398,15 +480,10 @@ export async function getRelatedTitles(title: CatalogTitle, limit = 8): Promise<
   const snapshot = await getCatalogSnapshot();
   return snapshot.items
     .filter((item) => item.id !== title.id)
-    .map((item) => {
-      const genreOverlap = item.genres.filter((genre) => title.genres.includes(genre)).length;
-      const sameYear = item.year === title.year ? 1 : 0;
-      const sameType = item.type === title.type ? 1 : 0;
-      return {
-        item,
-        score: genreOverlap * 10 + sameYear * 2 + sameType,
-      };
-    })
+    .map((item) => ({
+      item,
+      score: getRelatedCandidateScore(title, item),
+    }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score || compareTrending(left.item, right.item))
     .slice(0, limit)
