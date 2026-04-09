@@ -1,23 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { getLatestTitles, getTrendingTitles } from '../../shared/api/catalog';
+import { getHomeFeed } from '../../shared/api/catalog';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { titlePath } from '../../shared/lib/routes';
 
 export function HomePage() {
-  const latestQuery = useQuery({ queryKey: ['latest', 12], queryFn: () => getLatestTitles(12) });
-  const trendingQuery = useQuery({ queryKey: ['trending', 12], queryFn: () => getTrendingTitles(12) });
-  const hero = latestQuery.data?.[0];
+  const homeFeedQuery = useQuery({ queryKey: ['homeFeed'], queryFn: getHomeFeed });
+  const hero = homeFeedQuery.data?.hero;
 
   return (
     <PageShell
       title="Новинки и тренды"
       subtitle="Главный экран для быстрого discovery: свежие релизы, тренды и быстрый переход к просмотру."
-      isLoading={latestQuery.isLoading || trendingQuery.isLoading}
+      isLoading={homeFeedQuery.isLoading}
       banner={
-        latestQuery.isError || trendingQuery.isError ? (
+        homeFeedQuery.isError ? (
           <Alert severity="warning">Не удалось обновить ленту. Попробуйте перезагрузить страницу.</Alert>
         ) : undefined
       }
@@ -62,12 +61,12 @@ export function HomePage() {
 
       <Stack spacing={2}>
         <Typography variant="h4">Новинки</Typography>
-        <TitleGrid titles={latestQuery.data ?? []} />
+        <TitleGrid titles={homeFeedQuery.data?.latest ?? []} />
       </Stack>
 
       <Stack spacing={2}>
         <Typography variant="h4">Тренды</Typography>
-        <TitleGrid titles={trendingQuery.data ?? []} />
+        <TitleGrid titles={homeFeedQuery.data?.trending ?? []} />
       </Stack>
     </PageShell>
   );

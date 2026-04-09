@@ -84,6 +84,12 @@ const playlistSchema = z.array(
 
 let snapshotPromise: Promise<CatalogSnapshot> | null = null;
 
+export interface HomeFeed {
+  hero: CatalogTitle | null;
+  latest: CatalogTitle[];
+  trending: CatalogTitle[];
+}
+
 function ensureHttps(url: string): string {
   return url.replace(/^http:/i, 'https:');
 }
@@ -118,6 +124,21 @@ export async function getCatalogSnapshot(): Promise<CatalogSnapshot> {
   }
 
   return snapshotPromise;
+}
+
+function getTrendingTitlesSlice(items: CatalogTitle[], limit: number): CatalogTitle[] {
+  return [...items]
+    .sort((left, right) => right.trendingScore - left.trendingScore)
+    .slice(0, limit);
+}
+
+export function selectHomeFeed(snapshot: CatalogSnapshot): HomeFeed {
+  const latest = snapshot.items.slice(0, 12);
+  return {
+    hero: latest[0] ?? null,
+    latest,
+    trending: getTrendingTitlesSlice(snapshot.items, 12),
+  };
 }
 
 function matchesSearch(title: CatalogTitle, search: string): boolean {
@@ -171,9 +192,12 @@ export async function getLatestTitles(limit = 12): Promise<CatalogTitle[]> {
 
 export async function getTrendingTitles(limit = 12): Promise<CatalogTitle[]> {
   const snapshot = await getCatalogSnapshot();
-  return [...snapshot.items]
-    .sort((left, right) => right.trendingScore - left.trendingScore)
-    .slice(0, limit);
+  return getTrendingTitlesSlice(snapshot.items, limit);
+}
+
+export async function getHomeFeed(): Promise<HomeFeed> {
+  const snapshot = await getCatalogSnapshot();
+  return selectHomeFeed(snapshot);
 }
 
 export async function getTitleSummary(id: number): Promise<CatalogTitle | null> {
