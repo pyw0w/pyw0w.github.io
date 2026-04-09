@@ -137,80 +137,28 @@ export function TitlePage() {
       {detailQuery.data ? (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, lg: 8 }}>
-            <Card sx={{ overflow: 'hidden', boxShadow: '0 24px 80px rgba(0, 0, 0, 0.32)' }}>
-              <Box
-                sx={{
-                  position: 'relative',
-                  aspectRatio: '16 / 9',
-                  backgroundColor: 'common.black',
-                  backgroundImage: currentEpisode
-                    ? `linear-gradient(180deg, rgba(8,10,16,0.08) 0%, rgba(8,10,16,0.7) 100%), url(${currentEpisode.preview})`
-                    : undefined,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                }}
-              >
+            <Card>
+              <Box sx={{ aspectRatio: '16 / 9', backgroundColor: 'common.black' }}>
                 {currentEpisode ? (
-                  <>
-                    <Stack
-                      spacing={0.75}
-                      sx={{
-                        position: 'absolute',
-                        left: 16,
-                        bottom: 16,
-                        zIndex: 1,
-                        maxWidth: 'min(70%, 520px)',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      <Typography variant="overline" sx={{ letterSpacing: 1.6, color: 'primary.light', fontWeight: 700 }}>
-                        Сейчас воспроизводится
-                      </Typography>
-                      <Typography variant="h6" sx={{ color: 'common.white' }}>
-                        {currentEpisode.name}
-                      </Typography>
-                    </Stack>
-                    <video
-                      key={currentEpisode.id}
-                      controls
-                      playsInline
-                      poster={currentEpisode.preview}
-                      style={{ width: '100%', height: '100%' }}
-                      onPlay={() =>
-                        trackEvent('playback_start', {
-                          titleId: detailQuery.data.id,
-                          episodeId: currentEpisode.id,
-                        })
-                      }
-                    >
-                      <source src={currentEpisode.hd} type="video/mp4" />
-                      <source src={currentEpisode.std} type="video/mp4" />
-                    </video>
-                  </>
-                ) : (
-                  <Stack
-                    spacing={1.5}
-                    sx={{
-                      width: '100%',
-                      height: '100%',
-                      px: 3,
-                      textAlign: 'center',
-                      background: 'linear-gradient(180deg, rgba(8,10,16,0.55) 0%, rgba(8,10,16,0.82) 100%)',
-                    }}
-                    alignItems="center"
-                    justifyContent="center"
+                  <video
+                    key={currentEpisode.id}
+                    controls
+                    playsInline
+                    poster={currentEpisode.preview}
+                    style={{ width: '100%', height: '100%' }}
+                    onPlay={() =>
+                      trackEvent('playback_start', {
+                        titleId: detailQuery.data.id,
+                        episodeId: currentEpisode.id,
+                      })
+                    }
                   >
-                    {playlistQuery.isLoading ? (
-                      <>
-                        <CircularProgress />
-                        <Typography color="grey.300">Подготавливаем video player…</Typography>
-                      </>
-                    ) : (
-                      <>
-                        <Typography variant="h6">Видео пока недоступно</Typography>
-                        <Typography color="text.secondary">Выберите другой тайтл позже или дождитесь обновления playlist.</Typography>
-                      </>
-                    )}
+                    <source src={currentEpisode.hd} type="video/mp4" />
+                    <source src={currentEpisode.std} type="video/mp4" />
+                  </video>
+                ) : (
+                  <Stack sx={{ width: '100%', height: '100%' }} alignItems="center" justifyContent="center">
+                    {playlistQuery.isLoading ? <CircularProgress /> : <Alert severity="info">Видео пока недоступно.</Alert>}
                   </Stack>
                 )}
               </Box>
