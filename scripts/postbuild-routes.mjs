@@ -45,14 +45,45 @@ async function buildStaticShellRoutes(template) {
 async function buildTitleRoutes(template) {
   const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
   const prerenderTargets = catalog.items.slice(0, 120);
+  const routeEntries = [];
 
+  for (const item of prerenderTargets) {
+    routeEntries.push({
+      routeDir: join(distDir, 'title', `${item.slug}--${item.id}`),
+      title: `${item.title} — AV Player`,
+      description: item.shortDescription,
+    });
+
+    const animeTopSource = (item.sources ?? []).find((source) => source.sourceId === 'animetop');
+    if (animeTopSource) {
+      routeEntries.push({
+        routeDir: join(distDir, 'title', `${animeTopSource.legacySlug}-${animeTopSource.sourceTitleId}`),
+        title: `${item.title} — AV Player`,
+        description: item.shortDescription,
+      });
+    }
+
+    for (const source of item.sources ?? []) {
+      routeEntries.push({
+        routeDir: join(distDir, 'title', source.sourceId, `${source.legacySlug}--${source.legacyTitleId}`),
+        title: `${item.title} — AV Player`,
+        description: item.shortDescription,
+      });
+    }
+  }
+
+  const seen = new Set();
   await Promise.all(
-    prerenderTargets.map(async (item) => {
-      const routeDir = join(distDir, 'title', `${item.slug}-${item.id}`);
-      await mkdir(routeDir, { recursive: true });
-      const html = injectMeta(template, `${item.title} — AV Player`, item.shortDescription);
-      await writeFile(join(routeDir, 'index.html'), html);
-    }),
+    routeEntries
+      .filter((entry) => {
+        if (seen.has(entry.routeDir)) return false;
+        seen.add(entry.routeDir);
+        return true;
+      })
+      .map(async (entry) => {
+        await mkdir(entry.routeDir, { recursive: true });
+        await writeFile(join(entry.routeDir, 'index.html'), injectMeta(template, entry.title, entry.description));
+      }),
   );
 }
 

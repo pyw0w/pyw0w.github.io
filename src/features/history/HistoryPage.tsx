@@ -7,15 +7,25 @@ import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { getCatalogSnapshot } from '../../shared/api/catalog';
-import { getHistory } from '../../shared/storage/local';
+import { getHistory, getTitleStorageIds } from '../../shared/storage/local';
 
 export function HistoryPage() {
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
   const history = getHistory();
   const titles = useMemo(() => {
     if (!snapshotQuery.data) return [];
-    const itemsById = new Map(snapshotQuery.data.items.map((item) => [item.id, item]));
-    return history.map((entry) => itemsById.get(entry.id)).filter((item): item is CatalogTitle => Boolean(item));
+    const itemsById = new Map(
+      snapshotQuery.data.items.flatMap((item) => getTitleStorageIds(item).map((id) => [id, item] as const)),
+    );
+    const seen = new Set<string>();
+    return history
+      .map((entry) => itemsById.get(entry.id))
+      .filter((item): item is CatalogTitle => Boolean(item))
+      .filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
   }, [history, snapshotQuery.data]);
 
   return (

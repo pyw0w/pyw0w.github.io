@@ -4,13 +4,16 @@ import type {
   CatalogParams,
   CatalogResult,
   CatalogSnapshot,
+  CatalogSourceId,
   CatalogTitle,
+  CatalogTitleSource,
   PlaylistEpisode,
   TitleDetail,
   TitleStatus,
 } from '../../entities/catalog';
+import { parseTitleRouteParam } from '../lib/routes';
 
-const API_BASE = 'https://api.animetop.info/v1';
+const ANIMETOP_API_BASE = 'https://api.animetop.info/v1';
 const PAGE_SIZE = 24;
 const CATALOG_SORT_VALUES: CatalogParams['sort'][] = ['latest', 'trending', 'rating'];
 const STATUS_VALUES: TitleStatus[] = ['Анонс', 'Онгоинг', 'Завершено'];
@@ -32,8 +35,29 @@ export interface CatalogSearchData {
   generatedAt: string;
 }
 
+export interface ResolvedTitleRoute {
+  title: CatalogTitle | null;
+  preferredSourceId: CatalogSourceId | null;
+}
+
+const catalogTitleSourceSchema = z.object({
+  sourceId: z.enum(['animetop', 'anidub']),
+  sourceTitleId: z.string(),
+  legacyTitleId: z.string(),
+  legacySlug: z.string(),
+  title: z.string(),
+  originalTitle: z.string(),
+  fullTitle: z.string(),
+  episodeLabel: z.string(),
+  status: z.custom<TitleStatus>(),
+  isAnnouncement: z.boolean(),
+  releasedEpisodes: z.number().nullable(),
+  totalEpisodes: z.number().nullable(),
+  latestRank: z.number(),
+});
+
 const catalogTitleSchema = z.object({
-  id: z.number(),
+  id: z.string(),
   slug: z.string(),
   title: z.string(),
   originalTitle: z.string(),
@@ -58,6 +82,8 @@ const catalogTitleSchema = z.object({
   totalEpisodes: z.number().nullable(),
   latestRank: z.number(),
   searchText: z.string().transform((value) => normalizeSearchText(value)),
+  primarySourceId: z.enum(['animetop', 'anidub']),
+  sources: z.array(catalogTitleSourceSchema),
 });
 
 const catalogSnapshotSchema = z.object({
@@ -72,7 +98,7 @@ const catalogSnapshotSchema = z.object({
   items: z.array(catalogTitleSchema),
 });
 
-const detailResponseSchema = z.object({
+const animeTopDetailResponseSchema = z.object({
   state: z.object({
     status: z.string(),
   }),
@@ -93,7 +119,7 @@ const detailResponseSchema = z.object({
   ),
 });
 
-const playlistSchema = z.array(
+const animeTopPlaylistSchema = z.array(
   z.object({
     name: z.string(),
     hd: z.string(),
@@ -102,7 +128,54 @@ const playlistSchema = z.array(
   }),
 );
 
+const staticSourceDataSchema = z.object({
+  description: z.string().catch(''),
+  playerUrl: z.string().optional(),
+  playbackUnsupported: z.boolean().optional(),
+  playbackMessage: z.string().optional(),
+  playlist: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      hd: z.string().catch(''),
+      std: z.string().catch(''),
+      preview: z.string().catch(''),
+      playerUrl: z.string().optional(),
+      playbackUnsupported: z.boolean().optional(),
+      playbackMessage: z.string().optional(),
+    }),
+  ).default([]),
+});
+
+const staticTitleSourcesSchema = z.object({
+  animetop: staticSourceDataSchema.optional(),
+  anidub: staticSourceDataSchema.optional(),
+});
+
+const staticTitleDataSchema = z.union([
+  z.object({
+    sources: staticTitleSourcesSchema.default({}),
+  }).transform((payload) => ({
+    sources: payload.sources,
+  })),
+  staticSourceDataSchema.transform((sourceData) => ({
+    sources: {
+      animetop: undefined,
+      anidub: sourceData,
+    },
+  })),
+]);
+
+type StaticSourceData = z.infer<typeof staticSourceDataSchema>;
+interface StaticTitleData {
+  sources: {
+    animetop?: StaticSourceData;
+    anidub?: StaticSourceData;
+  };
+}
+
 let snapshotPromise: Promise<CatalogSnapshot> | null = null;
+const staticTitleDataPromises = new Map<string, Promise<StaticTitleData>>();
 
 export interface HomeFeed {
   hero: CatalogTitle | null;
@@ -111,6 +184,7 @@ export interface HomeFeed {
 }
 
 function ensureHttps(url: string): string {
+  if (!url) return '';
   return url.replace(/^http:/i, 'https:');
 }
 
@@ -231,6 +305,32 @@ export async function getCatalogSnapshot(): Promise<CatalogSnapshot> {
   return snapshotPromise;
 }
 
+async function getStaticTitleData(titleId: string): Promise<StaticTitleData> {
+  const existing = staticTitleDataPromises.get(titleId);
+  if (existing) return existing;
+
+  const request = fetch(`${getBasePath()}/data/titles/${titleId}.json`)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load static title data: ${response.status}`);
+      }
+      return staticTitleDataSchema.parse(await response.json());
+    })
+    .catch((error) => {
+      staticTitleDataPromises.delete(titleId);
+      throw error;
+    });
+
+  staticTitleDataPromises.set(titleId, request);
+  return request;
+}
+
+function getStaticSourceData(payload: StaticTitleData, sourceId: CatalogSourceId): StaticSourceData | undefined {
+  return sourceId === 'animetop'
+    ? payload.sources.animetop
+    : payload.sources.anidub;
+}
+
 function compareTrending(left: CatalogTitle, right: CatalogTitle): number {
   return right.trendingScore - left.trendingScore
     || right.votes - left.votes
@@ -326,6 +426,29 @@ function getTrendingTitlesSlice(items: CatalogTitle[], limit: number): CatalogTi
     .slice(0, limit);
 }
 
+function getPreferredTitleSource(title: CatalogTitle, preferredSourceId?: CatalogSourceId | null): CatalogTitleSource | null {
+  if (preferredSourceId) {
+    const exact = title.sources.find((source) => source.sourceId === preferredSourceId);
+    if (exact) return exact;
+  }
+
+  return title.sources.find((source) => source.sourceId === title.primarySourceId) ?? title.sources[0] ?? null;
+}
+
+function applySelectedSourceSummary(summary: CatalogTitle, source: CatalogTitleSource): CatalogTitle {
+  return {
+    ...summary,
+    title: source.title || summary.title,
+    originalTitle: source.originalTitle || summary.originalTitle,
+    fullTitle: source.fullTitle || summary.fullTitle,
+    episodeLabel: source.episodeLabel || summary.episodeLabel,
+    status: source.status || summary.status,
+    isAnnouncement: source.isAnnouncement,
+    releasedEpisodes: source.releasedEpisodes,
+    totalEpisodes: source.totalEpisodes,
+  };
+}
+
 export function selectHomeFeed(snapshot: CatalogSnapshot): HomeFeed {
   const latest = snapshot.items.slice(0, 12);
   return {
@@ -412,35 +535,49 @@ export async function getHomeFeed(): Promise<HomeFeed> {
   return selectHomeFeed(snapshot);
 }
 
-export async function getTitleSummary(id: number): Promise<CatalogTitle | null> {
+export async function getTitleSummary(id: string): Promise<CatalogTitle | null> {
   const snapshot = await getCatalogSnapshot();
   return snapshot.items.find((item) => item.id === id) ?? null;
 }
 
-export async function getTitleDetail(id: number): Promise<TitleDetail> {
-  const [summary, response] = await Promise.all([
-    getTitleSummary(id),
-    fetch(`${API_BASE}/info`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: buildQuery({ id: String(id) }),
-    }).then(async (result) => {
-      if (!result.ok) {
-        throw new Error(`Failed to load title info: ${result.status}`);
-      }
-      return detailResponseSchema.parse(await result.json());
-    }),
-  ]);
-
-  if (!summary) {
-    throw new Error('Title summary not found');
+export async function resolveTitleRoute(sourceId: string | undefined, slug: string | undefined): Promise<ResolvedTitleRoute> {
+  const routeParams = parseTitleRouteParam(sourceId, slug);
+  if (!routeParams) {
+    return {
+      title: null,
+      preferredSourceId: null,
+    };
   }
+
+  const snapshot = await getCatalogSnapshot();
+
+  return {
+    title: sourceId
+      ? snapshot.items.find((item) => item.sources.some((source) => source.legacyTitleId === routeParams.titleId)) ?? null
+      : snapshot.items.find((item) => item.id === routeParams.titleId) ?? null,
+    preferredSourceId: routeParams.preferredSourceId,
+  };
+}
+
+async function getAnimeTopTitleDetail(summary: CatalogTitle, source: CatalogTitleSource): Promise<TitleDetail> {
+  const selectedSummary = applySelectedSourceSummary(summary, source);
+  const response = await fetch(`${ANIMETOP_API_BASE}/info`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: buildQuery({ id: source.sourceTitleId }),
+  }).then(async (result) => {
+    if (!result.ok) {
+      throw new Error(`Failed to load title info: ${result.status}`);
+    }
+    return animeTopDetailResponseSchema.parse(await result.json());
+  });
 
   const detail = response.data[0];
   return {
-    ...summary,
+    ...selectedSummary,
+    selectedSourceId: source.sourceId,
     description: detail.description,
     poster: ensureHttps(detail.urlImagePreview),
     rating: detail.rating,
@@ -452,20 +589,54 @@ export async function getTitleDetail(id: number): Promise<TitleDetail> {
   };
 }
 
-export async function getPlaylist(id: number): Promise<PlaylistEpisode[]> {
-  const response = await fetch(`${API_BASE}/playlist`, {
+async function getAniDubTitleDetail(summary: CatalogTitle, source: CatalogTitleSource): Promise<TitleDetail> {
+  const selectedSummary = applySelectedSourceSummary(summary, source);
+  const detailPayload = await getStaticTitleData(summary.id);
+  const detail = getStaticSourceData(detailPayload, source.sourceId);
+
+  return {
+    ...selectedSummary,
+    selectedSourceId: source.sourceId,
+    description: detail?.description ?? '',
+    playerUrl: detail?.playerUrl,
+    playbackUnsupported: detail?.playbackUnsupported,
+    playbackMessage: detail?.playbackMessage,
+  };
+}
+
+export async function getTitleDetail(id: string, preferredSourceId?: CatalogSourceId | null): Promise<TitleDetail> {
+  const summary = await getTitleSummary(id);
+
+  if (!summary) {
+    throw new Error('Title summary not found');
+  }
+
+  const source = getPreferredTitleSource(summary, preferredSourceId);
+  if (!source) {
+    throw new Error('Title source not found');
+  }
+
+  if (source.sourceId === 'anidub') {
+    return getAniDubTitleDetail(summary, source);
+  }
+
+  return getAnimeTopTitleDetail(summary, source);
+}
+
+async function getAnimeTopPlaylist(summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
+  const response = await fetch(`${ANIMETOP_API_BASE}/playlist`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: buildQuery({ id: String(id) }),
+    body: buildQuery({ id: source.sourceTitleId }),
   });
 
   if (!response.ok) {
     throw new Error(`Failed to load playlist: ${response.status}`);
   }
 
-  const payload = playlistSchema.parse(await response.json());
+  const payload = animeTopPlaylistSchema.parse(await response.json());
 
   return payload.map((episode) => ({
     id: episode.name,
@@ -474,6 +645,31 @@ export async function getPlaylist(id: number): Promise<PlaylistEpisode[]> {
     std: ensureHttps(episode.std),
     preview: ensureHttps(episode.preview),
   }));
+}
+
+async function getAniDubPlaylist(summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
+  const detailPayload = await getStaticTitleData(summary.id);
+  const detail = getStaticSourceData(detailPayload, source.sourceId);
+  return detail?.playlist ?? [];
+}
+
+export async function getPlaylist(id: string, preferredSourceId?: CatalogSourceId | null): Promise<PlaylistEpisode[]> {
+  const summary = await getTitleSummary(id);
+
+  if (!summary) {
+    throw new Error('Title summary not found');
+  }
+
+  const source = getPreferredTitleSource(summary, preferredSourceId);
+  if (!source) {
+    throw new Error('Title source not found');
+  }
+
+  if (source.sourceId === 'anidub') {
+    return getAniDubPlaylist(summary, source);
+  }
+
+  return getAnimeTopPlaylist(summary, source);
 }
 
 export async function getRelatedTitles(title: CatalogTitle, limit = 8): Promise<CatalogTitle[]> {
