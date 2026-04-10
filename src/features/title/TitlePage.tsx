@@ -106,11 +106,14 @@ export function TitlePage() {
   useEffect(() => {
     if (!title) return;
 
-    const nextSourceId = routeQuery.data?.preferredSourceId
+    const requestedSourceId = routeQuery.data?.preferredSourceId
       ?? getPreferredSourceId(title.id)
       ?? title.primarySourceId
       ?? title.sources[0]?.sourceId
       ?? null;
+    const nextSourceId = requestedSourceId && title.sources.some((source) => source.sourceId === requestedSourceId)
+      ? requestedSourceId
+      : title.primarySourceId ?? title.sources[0]?.sourceId ?? null;
 
     setSelectedSourceIdState(nextSourceId);
     setSelectedEpisodeState(null);
