@@ -14,6 +14,7 @@ const PAGE_SIZE = 40;
 const STATUS_VALUES = ['Анонс', 'Онгоинг', 'Завершено'];
 const TRENDING_MIN_VOTES = 50;
 const TRENDING_ONGOING_BOOST = 1.05;
+const TRUSTED_ANIDUB_PLAYER_HOSTS = new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']);
 const CYRILLIC_MAP = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
   к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
@@ -39,17 +40,43 @@ function truncateText(value, maxLength) {
 }
 
 function decodeHtmlEntities(value = '') {
-  return String(value)
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#039;/gi, "'")
-    .replace(/&#39;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&#124;/gi, '|')
-    .replace(/&#x([\da-f]+);/gi, (_match, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number.parseInt(code, 10)));
+  const namedEntities = {
+    amp: '&',
+    quot: '"',
+    '#039': "'",
+    '#39': "'",
+    lt: '<',
+    gt: '>',
+    nbsp: ' ',
+    '#124': '|',
+  };
+
+  return String(value).replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, entity) => {
+    const normalized = entity.toLowerCase();
+    if (normalized in namedEntities) {
+      return namedEntities[normalized];
+    }
+    if (normalized.startsWith('#x')) {
+      return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
+    }
+    if (normalized.startsWith('#')) {
+      return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
+    }
+    return match;
+  });
+}
+
+function getTrustedAniDubPlayerUrl(url) {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(String(url).replace(/^http:/i, 'https:'));
+    if (parsed.protocol !== 'https:') return '';
+    if (!TRUSTED_ANIDUB_PLAYER_HOSTS.has(parsed.host)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
 }
 
 function slugify(value, fallbackId) {
@@ -355,7 +382,7 @@ function normalizeAniDubItem(rawItem, latestRank) {
 
 function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.id) {
   const xfields = parseAniDubXfields(rawItem.xfields);
-  const playerUrl = ensureHttps(decodeHtmlEntities(xfields.playerfull ?? ''));
+  const playerUrl = getTrustedAniDubPlayerUrl(decodeHtmlEntities(xfields.playerfull ?? ''));
   const hasEmbeddedPlayer = Boolean(playerUrl);
   const playbackMessage = hasEmbeddedPlayer
     ? undefined

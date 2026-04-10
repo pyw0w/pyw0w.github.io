@@ -11,21 +11,32 @@ export function titlePath(title: Pick<CatalogTitle, 'id' | 'slug'>): string {
 
 export function parseTitleRouteParam(sourceId: string | undefined, value: string | undefined): TitleRouteParams | null {
   if (!value) return null;
-  const match = value.match(/--([a-z0-9-]+)$/i);
-  if (!match) return null;
 
-  if (!sourceId) {
+  const canonicalMatch = value.match(/--([a-z0-9-]+)$/i);
+  if (canonicalMatch) {
+    if (!sourceId) {
+      return {
+        titleId: canonicalMatch[1],
+        preferredSourceId: null,
+      };
+    }
+
+    if (sourceId !== 'animetop' && sourceId !== 'anidub') return null;
+    if (!canonicalMatch[1].startsWith(`${sourceId}-`)) return null;
+
     return {
-      titleId: match[1],
-      preferredSourceId: null,
+      titleId: canonicalMatch[1],
+      preferredSourceId: sourceId,
     };
   }
 
-  if (sourceId !== 'animetop' && sourceId !== 'anidub') return null;
-  if (!match[1].startsWith(`${sourceId}-`)) return null;
+  if (sourceId) return null;
+
+  const legacyAnimeTopMatch = value.match(/-(\d+)$/);
+  if (!legacyAnimeTopMatch) return null;
 
   return {
-    titleId: match[1],
-    preferredSourceId: sourceId,
+    titleId: `animetop-${legacyAnimeTopMatch[1]}`,
+    preferredSourceId: 'animetop',
   };
 }

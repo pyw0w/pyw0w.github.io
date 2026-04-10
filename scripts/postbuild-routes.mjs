@@ -54,6 +54,15 @@ async function buildTitleRoutes(template) {
       description: item.shortDescription,
     });
 
+    const animeTopSource = (item.sources ?? []).find((source) => source.sourceId === 'animetop');
+    if (animeTopSource) {
+      routeEntries.push({
+        routeDir: join(distDir, 'title', `${animeTopSource.legacySlug}-${animeTopSource.sourceTitleId}`),
+        title: `${item.title} — AV Player`,
+        description: item.shortDescription,
+      });
+    }
+
     for (const source of item.sources ?? []) {
       routeEntries.push({
         routeDir: join(distDir, 'title', source.sourceId, `${source.legacySlug}--${source.legacyTitleId}`),

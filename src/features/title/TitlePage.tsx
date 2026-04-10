@@ -36,8 +36,23 @@ import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 
+const TRUSTED_EMBED_HOSTS = new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']);
+
 function getSourceLabel(sourceId: CatalogSourceId): string {
   return sourceId === 'anidub' ? 'AniDub' : 'AnimeTop';
+}
+
+function getTrustedEmbedUrl(url: string | undefined): string {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return '';
+    if (!TRUSTED_EMBED_HOSTS.has(parsed.host)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
 }
 
 export function TitlePage() {
@@ -141,8 +156,15 @@ export function TitlePage() {
   );
   const previousEpisode = currentEpisodeIndex > 0 ? playlistQuery.data?.[currentEpisodeIndex - 1] ?? null : null;
   const nextEpisode = currentEpisodeIndex >= 0 ? playlistQuery.data?.[currentEpisodeIndex + 1] ?? null : null;
-  const currentPlayerUrl = currentEpisode?.playerUrl ?? detailQuery.data?.playerUrl ?? '';
-  const playbackMessage = currentEpisode?.playbackMessage || detailQuery.data?.playbackMessage || 'Видео пока недоступно.';
+  const rawPlayerUrl = currentEpisode?.playerUrl ?? detailQuery.data?.playerUrl ?? '';
+  const currentPlayerUrl = getTrustedEmbedUrl(rawPlayerUrl);
+  const hasUnsafePlayerUrl = Boolean(rawPlayerUrl) && !currentPlayerUrl;
+  const playbackUnsupported = Boolean(currentEpisode?.playbackUnsupported || detailQuery.data?.playbackUnsupported || hasUnsafePlayerUrl);
+  const playbackMessage = currentEpisode?.playbackMessage
+    || detailQuery.data?.playbackMessage
+    || (hasUnsafePlayerUrl
+      ? 'Источник вернул неподдерживаемую ссылку для встроенного плеера, поэтому playback отключён.'
+      : 'Видео пока недоступно.');
 
   function selectEpisode(episodeId: string) {
     if (!detailQuery.data || !selectedSourceId || selectedSourceId === 'anidub') return;
@@ -193,7 +215,7 @@ export function TitlePage() {
             <Grid size={{ xs: 12, lg: 8 }}>
               <Card>
                 <Box sx={{ aspectRatio: '16 / 9', backgroundColor: 'common.black' }}>
-                  {currentEpisode?.playbackUnsupported || detailQuery.data.playbackUnsupported ? (
+                  {playbackUnsupported ? (
                     <Stack sx={{ width: '100%', height: '100%', p: 2 }} alignItems="center" justifyContent="center">
                       <Alert severity="info">{playbackMessage}</Alert>
                     </Stack>
