@@ -1,12 +1,15 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const outputPath = join(rootDir, 'public', 'data', 'catalog.json');
+const titleDataDir = join(rootDir, 'public', 'data', 'titles');
 
-const API_BASE = 'https://api.animetop.info/v1';
+const ANIMETOP_API_BASE = 'https://api.animetop.info/v1';
+const ANIDUB_API_BASE = 'https://isekai.anidub.fun';
+const ANIDUB_SEARCH_URL = `${ANIDUB_API_BASE}/mobile-api.php?name=search&story=`;
 const PAGE_SIZE = 40;
 const STATUS_VALUES = ['Анонс', 'Онгоинг', 'Завершено'];
 const TRENDING_MIN_VOTES = 50;
@@ -33,6 +36,20 @@ function stripHtml(html = '') {
 function truncateText(value, maxLength) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function decodeHtmlEntities(value = '') {
+  return String(value)
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#124;/gi, '|')
+    .replace(/&#x([\da-f]+);/gi, (_match, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCodePoint(Number.parseInt(code, 10)));
 }
 
 function slugify(value, fallbackId) {
@@ -147,7 +164,11 @@ function buildSearchText(parts) {
   return normalizeSearchText(parts.filter(Boolean).join(' '));
 }
 
-function normalizeItem(rawItem, latestRank, trendingContext) {
+function buildTitleId(sourceId, sourceTitleId) {
+  return `${sourceId}-${sourceTitleId}`;
+}
+
+function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
   const parsed = parseTitleParts(rawItem.title);
   const episodeStats = parseEpisodeStats(parsed.episodeLabel);
   const plainDescription = stripHtml(rawItem.description);
@@ -167,9 +188,12 @@ function normalizeItem(rawItem, latestRank, trendingContext) {
     hasOpenEndedTotal: episodeStats.hasOpenEndedTotal,
   });
   const trendingScore = computeTrendingScore({ averageScore, votes, status }, trendingContext);
+  const sourceTitleId = String(rawItem.id);
 
   return {
-    id: Number(rawItem.id),
+    id: buildTitleId('animetop', sourceTitleId),
+    sourceId: 'animetop',
+    sourceTitleId,
     slug: slugify(parsed.originalTitle || parsed.title, rawItem.id),
     title: parsed.title,
     originalTitle: parsed.originalTitle,
@@ -204,6 +228,161 @@ function normalizeItem(rawItem, latestRank, trendingContext) {
   };
 }
 
+function parseAniDubXfields(input = '') {
+  const result = {};
+  const parts = decodeHtmlEntities(input).split('||').filter(Boolean);
+
+  for (const part of parts) {
+    const separator = part.indexOf('|');
+    if (separator === -1) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (!key) continue;
+    result[key] = value;
+  }
+
+  return result;
+}
+
+function parseAniDubNumber(value) {
+  const numeric = Number.parseInt(String(value ?? '').trim(), 10);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function inferAniDubType(title, xfields) {
+  const normalizedTitle = String(title ?? '').toLowerCase();
+  const originalTitle = String(xfields.orig_title ?? '').toLowerCase();
+  const combined = `${normalizedTitle} ${originalTitle}`;
+
+  if (/\bmovie\b|фильм/.test(combined)) return 'Фильм';
+  if (/\bova\b/.test(combined)) return 'OVA';
+  if (/\bona\b/.test(combined)) return 'ONA';
+  if (/special|спэшл|спецвыпуск/.test(combined)) return 'Спешл';
+  return 'ТВ';
+}
+
+function deriveAniDubEpisodeLabel(releasedEpisodes, totalEpisodes) {
+  if (releasedEpisodes !== null && totalEpisodes !== null) {
+    return `${releasedEpisodes} из ${totalEpisodes}`;
+  }
+  if (releasedEpisodes !== null) {
+    return `${releasedEpisodes} серия`;
+  }
+  if (totalEpisodes !== null) {
+    return `0 из ${totalEpisodes}`;
+  }
+  return '';
+}
+
+function deriveAniDubStatus({ isAnnouncement, releasedEpisodes, totalEpisodes }) {
+  if (isAnnouncement) return 'Анонс';
+  if (releasedEpisodes !== null && totalEpisodes !== null && releasedEpisodes < totalEpisodes) {
+    return 'Онгоинг';
+  }
+  return 'Завершено';
+}
+
+function buildAniDubPosterUrl(xfields) {
+  const posterPath = String(xfields.upposter2 ?? '').split('|')[0]?.trim();
+  if (!posterPath) return '';
+  return ensureHttps(`${ANIDUB_API_BASE}/uploads/posts/${posterPath.replace(/^\/+/, '')}`);
+}
+
+function pickAniDubDescription(rawItem) {
+  const rich = String(rawItem.full_story ?? '').trim();
+  if (rich) return rich;
+  const short = String(rawItem.short_story ?? '').trim();
+  if (short) return short;
+  return String(rawItem.descr ?? '').trim();
+}
+
+function normalizeAniDubItem(rawItem, latestRank) {
+  const xfields = parseAniDubXfields(rawItem.xfields);
+  const releasedEpisodes = parseAniDubNumber(xfields.addepisode);
+  const totalEpisodes = parseAniDubNumber(xfields.series);
+  const isAnnouncement = String(xfields.anons ?? '') === '1';
+  const status = deriveAniDubStatus({ isAnnouncement, releasedEpisodes, totalEpisodes });
+  const plainDescription = stripHtml(pickAniDubDescription(rawItem));
+  const genres = String(xfields.genre ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const originalTitle = String(xfields.orig_title ?? '').trim();
+  const title = String(rawItem.title ?? '').trim();
+  const sourceTitleId = String(rawItem.id);
+  const season = parseAniDubNumber(xfields.addseason);
+  const episodeLabel = deriveAniDubEpisodeLabel(releasedEpisodes, totalEpisodes);
+  const badges = season && season > 1 ? [`Сезон ${season}`] : [];
+
+  return {
+    id: buildTitleId('anidub', sourceTitleId),
+    sourceId: 'anidub',
+    sourceTitleId,
+    slug: slugify(originalTitle || rawItem.alt_name || title, sourceTitleId),
+    title,
+    originalTitle,
+    fullTitle: title,
+    episodeLabel,
+    badges,
+    year: String(xfields.year ?? '').trim(),
+    genres,
+    type: inferAniDubType(title, xfields),
+    director: String(xfields.director ?? '').trim(),
+    poster: buildAniDubPosterUrl(xfields),
+    screens: [],
+    shortDescription: truncateText(plainDescription, 240),
+    rating: 0,
+    votes: 0,
+    averageScore: 0,
+    trendingScore: 0,
+    timer: 0,
+    isAnnouncement,
+    status,
+    releasedEpisodes,
+    totalEpisodes,
+    latestRank,
+    searchText: buildSearchText([
+      title,
+      originalTitle,
+      rawItem.alt_name,
+      genres.join(' '),
+      xfields.year,
+      xfields.director,
+      plainDescription,
+    ]),
+  };
+}
+
+function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.id) {
+  const xfields = parseAniDubXfields(rawItem.xfields);
+  const playerUrl = ensureHttps(decodeHtmlEntities(xfields.playerfull ?? ''));
+  const hasEmbeddedPlayer = Boolean(playerUrl);
+  const playbackMessage = hasEmbeddedPlayer
+    ? undefined
+    : xfields.player1
+      ? 'Для этого релиза AniDub использует внешний защищённый плеер, который нельзя встроить в static-версии сайта.'
+      : 'Видео для этого релиза пока недоступно.';
+
+  return {
+    description: pickAniDubDescription(rawItem),
+    playerUrl: hasEmbeddedPlayer ? playerUrl : undefined,
+    playbackUnsupported: hasEmbeddedPlayer ? undefined : true,
+    playbackMessage,
+    playlist: hasEmbeddedPlayer
+      ? [
+        {
+          id: `${titleId}-player`,
+          name: normalizedItem.episodeLabel || 'Плеер AniDub',
+          hd: '',
+          std: '',
+          preview: normalizedItem.poster,
+          playerUrl,
+        },
+      ]
+      : [],
+  };
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
@@ -218,20 +397,19 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchPage(page) {
-  return fetchJson(`${API_BASE}/last?page=${page}&quantity=${PAGE_SIZE}`);
+async function fetchAnimeTopPage(page) {
+  return fetchJson(`${ANIMETOP_API_BASE}/last?page=${page}&quantity=${PAGE_SIZE}`);
 }
 
-async function main() {
-  console.log('Syncing catalog snapshot from API...');
-  const firstPage = await fetchPage(1);
+async function fetchAnimeTopItems() {
+  const firstPage = await fetchAnimeTopPage(1);
   const totalCount = Number(firstPage?.state?.count) || 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const allRawItems = [...(Array.isArray(firstPage.data) ? firstPage.data : [])];
 
   for (let page = 2; page <= totalPages; page += 1) {
-    console.log(`Fetching page ${page}/${totalPages}`);
-    const nextPage = await fetchPage(page);
+    console.log(`Fetching AnimeTop page ${page}/${totalPages}`);
+    const nextPage = await fetchAnimeTopPage(page);
     if (Array.isArray(nextPage.data)) {
       allRawItems.push(...nextPage.data);
     }
@@ -241,14 +419,182 @@ async function main() {
   const seenIds = new Set();
 
   for (const rawItem of allRawItems) {
-    const id = Number(rawItem.id);
+    const id = String(rawItem.id);
     if (seenIds.has(id)) continue;
     seenIds.add(id);
     uniqueItems.push(rawItem);
   }
 
   const trendingContext = buildTrendingContext(uniqueItems);
-  const items = uniqueItems.map((rawItem, index) => normalizeItem(rawItem, index, trendingContext));
+  return uniqueItems.map((rawItem, index) => normalizeAnimeTopItem(rawItem, index, trendingContext));
+}
+
+async function fetchAniDubItems() {
+  const payload = await fetchJson(ANIDUB_SEARCH_URL);
+  const rawItems = Array.isArray(payload) ? payload : [];
+  const uniqueItems = [];
+  const seenIds = new Set();
+
+  for (const rawItem of rawItems) {
+    const id = String(rawItem.id ?? '').trim();
+    const title = String(rawItem.title ?? '').trim();
+    if (!id || !title || seenIds.has(id)) continue;
+    seenIds.add(id);
+    uniqueItems.push(rawItem);
+  }
+
+  return uniqueItems.map((rawItem, index) => ({
+    rawItem,
+    normalized: normalizeAniDubItem(rawItem, index),
+  }));
+}
+
+function buildCanonicalMergeKey(item) {
+  const originalTitle = normalizeSearchText(item.originalTitle);
+  const year = normalizeSearchText(item.year);
+  const type = normalizeSearchText(item.type);
+
+  if (!originalTitle || !year || !type) return '';
+  return `${originalTitle}|${year}|${type}`;
+}
+
+function addToMapArray(map, key, value) {
+  if (!key) return;
+  const current = map.get(key);
+  if (current) {
+    current.push(value);
+    return;
+  }
+  map.set(key, [value]);
+}
+
+function getProviderSortRank(item) {
+  return (item.latestRank * 2) + (item.sourceId === 'animetop' ? 0 : 1);
+}
+
+function choosePrimaryItem(items) {
+  return items.find((item) => item.sourceId === 'animetop') ?? items[0];
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function buildTitleSource(item) {
+  return {
+    sourceId: item.sourceId,
+    sourceTitleId: item.sourceTitleId,
+    legacyTitleId: item.id,
+    legacySlug: item.slug,
+    title: item.title,
+    originalTitle: item.originalTitle,
+    fullTitle: item.fullTitle,
+    episodeLabel: item.episodeLabel,
+    status: item.status,
+    isAnnouncement: item.isAnnouncement,
+    releasedEpisodes: item.releasedEpisodes,
+    totalEpisodes: item.totalEpisodes,
+    latestRank: item.latestRank,
+  };
+}
+
+function buildCanonicalItem(items) {
+  const orderedItems = [...items].sort((left, right) => getProviderSortRank(left) - getProviderSortRank(right));
+  const primary = choosePrimaryItem(orderedItems);
+
+  return {
+    id: primary.id,
+    slug: primary.slug,
+    title: primary.title,
+    originalTitle: primary.originalTitle,
+    fullTitle: primary.fullTitle,
+    episodeLabel: primary.episodeLabel,
+    badges: uniqueStrings(orderedItems.flatMap((item) => item.badges)),
+    year: primary.year,
+    genres: uniqueStrings(orderedItems.flatMap((item) => item.genres)),
+    type: primary.type,
+    director: primary.director,
+    poster: primary.poster,
+    screens: uniqueStrings(orderedItems.flatMap((item) => item.screens)),
+    shortDescription: primary.shortDescription,
+    rating: primary.rating,
+    votes: primary.votes,
+    averageScore: primary.averageScore,
+    trendingScore: Math.max(...orderedItems.map((item) => item.trendingScore)),
+    timer: primary.timer,
+    isAnnouncement: primary.isAnnouncement,
+    status: primary.status,
+    releasedEpisodes: primary.releasedEpisodes,
+    totalEpisodes: primary.totalEpisodes,
+    latestRank: Math.min(...orderedItems.map(getProviderSortRank)),
+    searchText: normalizeSearchText(orderedItems.map((item) => item.searchText).join(' ')),
+    primarySourceId: primary.sourceId,
+    sources: orderedItems.map(buildTitleSource),
+  };
+}
+
+function buildCanonicalGroups(animeTopItems, aniDubItems) {
+  const animeTopByKey = new Map();
+  const aniDubByKey = new Map();
+
+  animeTopItems.forEach((item) => addToMapArray(animeTopByKey, buildCanonicalMergeKey(item), item));
+  aniDubItems.forEach((item) => addToMapArray(aniDubByKey, buildCanonicalMergeKey(item), item));
+
+  const usedIds = new Set();
+  const groups = [];
+
+  for (const [key, animeTopMatches] of animeTopByKey) {
+    const aniDubMatches = aniDubByKey.get(key);
+    if (animeTopMatches.length !== 1 || !aniDubMatches || aniDubMatches.length !== 1) continue;
+
+    const [animeTopItem] = animeTopMatches;
+    const [aniDubItem] = aniDubMatches;
+    usedIds.add(animeTopItem.id);
+    usedIds.add(aniDubItem.id);
+    groups.push([animeTopItem, aniDubItem]);
+  }
+
+  for (const item of animeTopItems) {
+    if (!usedIds.has(item.id)) groups.push([item]);
+  }
+
+  for (const item of aniDubItems) {
+    if (!usedIds.has(item.id)) groups.push([item]);
+  }
+
+  return groups
+    .map((items) => ({
+      items,
+      latestRank: Math.min(...items.map(getProviderSortRank)),
+    }))
+    .sort((left, right) => left.latestRank - right.latestRank)
+    .map((entry) => entry.items);
+}
+
+async function writeAniDubTitleData(entries) {
+  await rm(titleDataDir, { recursive: true, force: true });
+  await mkdir(titleDataDir, { recursive: true });
+
+  for (const [titleId, payload] of entries) {
+    await writeFile(join(titleDataDir, `${titleId}.json`), JSON.stringify(payload));
+  }
+}
+
+async function main() {
+  console.log('Syncing merged catalog snapshot...');
+  const [animeTopItems, aniDubEntries] = await Promise.all([
+    fetchAnimeTopItems(),
+    fetchAniDubItems(),
+  ]);
+
+  const aniDubItems = aniDubEntries.map((entry) => entry.normalized);
+  const aniDubEntriesByLegacyId = new Map(aniDubEntries.map((entry) => [entry.normalized.id, entry]));
+  const groups = buildCanonicalGroups(animeTopItems, aniDubItems);
+  const groupedItems = groups.map((groupItems) => ({
+    item: buildCanonicalItem(groupItems),
+    groupItems,
+  }));
+  const items = groupedItems.map((entry) => entry.item);
   const filters = {
     genres: [...new Set(items.flatMap((item) => item.genres))].sort((left, right) => left.localeCompare(right, 'ru')),
     years: [...new Set(items.map((item) => item.year).filter(Boolean))].sort((left, right) => Number(right) - Number(left)),
@@ -263,10 +609,26 @@ async function main() {
     items,
   };
 
+  const titleDataEntries = groupedItems.flatMap(({ item }) => {
+    const aniDubSource = item.sources.find((source) => source.sourceId === 'anidub');
+    if (!aniDubSource) return [];
+
+    const aniDubEntry = aniDubEntriesByLegacyId.get(aniDubSource.legacyTitleId);
+    if (!aniDubEntry) return [];
+
+    return [[item.id, {
+      sources: {
+        anidub: buildAniDubTitleData(aniDubEntry.rawItem, aniDubEntry.normalized, item.id),
+      },
+    }]];
+  });
+
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, JSON.stringify(payload));
+  await writeAniDubTitleData(titleDataEntries);
 
   console.log(`Saved ${items.length} titles to ${outputPath}`);
+  console.log(`Saved ${titleDataEntries.length} AniDub title payloads to ${titleDataDir}`);
 }
 
 main().catch((error) => {

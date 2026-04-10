@@ -53,6 +53,10 @@ export const router = createBrowserRouter([
         path: 'title/:slug',
         element: renderLazyPage(TitlePage),
       },
+      {
+        path: 'title/:sourceId/:slug',
+        element: renderLazyPage(TitlePage),
+      },
     ],
   },
 ], { basename });

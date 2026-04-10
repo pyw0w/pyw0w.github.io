@@ -5,12 +5,12 @@ import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { getCatalogSnapshot } from '../../shared/api/catalog';
-import { getFavorites } from '../../shared/storage/local';
+import { getFavorites, matchesStoredTitleIds } from '../../shared/storage/local';
 
 export function FavoritesPage() {
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
-  const favoriteIds = getFavorites().map((item) => item.id);
-  const titles = snapshotQuery.data?.items.filter((item) => favoriteIds.includes(item.id)) ?? [];
+  const favoriteIds = new Set(getFavorites().map((item) => item.id));
+  const titles = snapshotQuery.data?.items.filter((item) => matchesStoredTitleIds(item, favoriteIds)) ?? [];
 
   return (
     <PageShell

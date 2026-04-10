@@ -19,60 +19,104 @@ import {
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { useParams } from 'react-router-dom';
-import { getCatalogSnapshot, getPlaylist, getRelatedTitles, getTitleDetail } from '../../shared/api/catalog';
+import type { CatalogSourceId } from '../../entities/catalog';
+import { getCatalogSnapshot, getPlaylist, getRelatedTitles, getTitleDetail, resolveTitleRoute } from '../../shared/api/catalog';
 import { trackEvent } from '../../shared/analytics/events';
 import { formatGenres, formatScore, sanitizeHtml } from '../../shared/lib/text';
-import { getSelectedEpisode, isFavorite, pushHistory, setSelectedEpisode, toggleFavorite } from '../../shared/storage/local';
+import {
+  getPreferredSourceId,
+  getSelectedEpisode,
+  isFavorite,
+  pushHistory,
+  setPreferredSourceId,
+  setSelectedEpisode,
+  toggleFavorite,
+} from '../../shared/storage/local';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
-import { parseTitleRouteParam } from '../../shared/lib/routes';
+
+function getSourceLabel(sourceId: CatalogSourceId): string {
+  return sourceId === 'anidub' ? 'AniDub' : 'AnimeTop';
+}
 
 export function TitlePage() {
   const params = useParams();
-  const titleId = parseTitleRouteParam(params.slug);
   const [selectedEpisode, setSelectedEpisodeState] = useState<string | null>(null);
   const [favorite, setFavorite] = useState(false);
+  const [selectedSourceId, setSelectedSourceIdState] = useState<CatalogSourceId | null>(null);
 
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
+  const routeQuery = useQuery({
+    queryKey: ['titleRoute', params.sourceId ?? '', params.slug ?? ''],
+    queryFn: () => resolveTitleRoute(params.sourceId, params.slug),
+  });
+
+  const title = routeQuery.data?.title ?? null;
+  const titleId = title?.id ?? null;
 
   const detailQuery = useQuery({
-    queryKey: ['title', titleId],
+    queryKey: ['title', titleId, selectedSourceId],
     queryFn: () => {
-      if (!titleId) throw new Error('Invalid title route');
-      return getTitleDetail(titleId);
+      if (!titleId || !selectedSourceId) throw new Error('Invalid title route');
+      return getTitleDetail(titleId, selectedSourceId);
     },
-    enabled: Boolean(titleId),
+    enabled: Boolean(titleId && selectedSourceId),
   });
 
   const playlistQuery = useQuery({
-    queryKey: ['playlist', titleId],
+    queryKey: ['playlist', titleId, selectedSourceId],
     queryFn: () => {
-      if (!titleId) throw new Error('Invalid title route');
-      return getPlaylist(titleId);
+      if (!titleId || !selectedSourceId) throw new Error('Invalid title route');
+      return getPlaylist(titleId, selectedSourceId);
     },
-    enabled: Boolean(titleId),
+    enabled: Boolean(titleId && selectedSourceId),
   });
 
   const relatedQuery = useQuery({
     queryKey: ['related', titleId],
     queryFn: () => {
-      if (!detailQuery.data) throw new Error('Missing detail');
-      return getRelatedTitles(detailQuery.data);
+      if (!title) throw new Error('Missing title');
+      return getRelatedTitles(title);
     },
-    enabled: Boolean(detailQuery.data),
+    enabled: Boolean(title),
   });
 
   useEffect(() => {
-    if (!detailQuery.data) return;
-    pushHistory(detailQuery.data);
-    setFavorite(isFavorite(detailQuery.data.id));
-    trackEvent('title_open', { titleId: detailQuery.data.id, slug: detailQuery.data.slug });
-  }, [detailQuery.data]);
+    if (!title) return;
+    pushHistory(title);
+    setFavorite(isFavorite(title));
+  }, [title]);
 
   useEffect(() => {
-    if (!playlistQuery.data || !detailQuery.data) return;
-    const saved = getSelectedEpisode(detailQuery.data.id);
+    if (!title) return;
+
+    const nextSourceId = routeQuery.data?.preferredSourceId
+      ?? getPreferredSourceId(title.id)
+      ?? title.primarySourceId
+      ?? title.sources[0]?.sourceId
+      ?? null;
+
+    setSelectedSourceIdState(nextSourceId);
+    setSelectedEpisodeState(null);
+  }, [routeQuery.data?.preferredSourceId, title]);
+
+  useEffect(() => {
+    if (!title || !selectedSourceId) return;
+    setPreferredSourceId(title.id, selectedSourceId);
+    trackEvent('title_open', { titleId: title.id, slug: title.slug, sourceId: selectedSourceId });
+  }, [selectedSourceId, title]);
+
+  useEffect(() => {
+    if (!playlistQuery.data || !detailQuery.data || !selectedSourceId) return;
+
+    if (selectedSourceId === 'anidub') {
+      setSelectedEpisodeState(playlistQuery.data[0]?.id ?? null);
+      return;
+    }
+
+    const currentSource = detailQuery.data.sources.find((source) => source.sourceId === selectedSourceId);
+    const saved = getSelectedEpisode(detailQuery.data.id, selectedSourceId, currentSource?.legacyTitleId);
     const hasSavedEpisode = saved
       ? playlistQuery.data.some((episode) => episode.id === saved)
       : false;
@@ -81,9 +125,9 @@ export function TitlePage() {
     setSelectedEpisodeState(nextEpisode);
 
     if (!hasSavedEpisode && nextEpisode) {
-      setSelectedEpisode(detailQuery.data.id, nextEpisode);
+      setSelectedEpisode(detailQuery.data.id, selectedSourceId, nextEpisode);
     }
-  }, [detailQuery.data, playlistQuery.data]);
+  }, [detailQuery.data, playlistQuery.data, selectedSourceId]);
 
   const currentEpisode = useMemo(
     () => playlistQuery.data?.find((episode) => episode.id === selectedEpisode) ?? playlistQuery.data?.[0],
@@ -97,22 +141,32 @@ export function TitlePage() {
   );
   const previousEpisode = currentEpisodeIndex > 0 ? playlistQuery.data?.[currentEpisodeIndex - 1] ?? null : null;
   const nextEpisode = currentEpisodeIndex >= 0 ? playlistQuery.data?.[currentEpisodeIndex + 1] ?? null : null;
+  const currentPlayerUrl = currentEpisode?.playerUrl ?? detailQuery.data?.playerUrl ?? '';
+  const playbackMessage = currentEpisode?.playbackMessage || detailQuery.data?.playbackMessage || 'Видео пока недоступно.';
 
   function selectEpisode(episodeId: string) {
-    if (!detailQuery.data) return;
+    if (!detailQuery.data || !selectedSourceId || selectedSourceId === 'anidub') return;
     setSelectedEpisodeState(episodeId);
-    setSelectedEpisode(detailQuery.data.id, episodeId);
+    setSelectedEpisode(detailQuery.data.id, selectedSourceId, episodeId);
   }
 
-  if (!titleId) {
+  if (routeQuery.isError) {
     return (
-      <PageShell title="Тайтл не найден">
-        <Alert severity="error">Маршрут тайтла поврежден.</Alert>
+      <PageShell title="Тайтл недоступен">
+        <Alert severity="error">Не удалось разобрать маршрут тайтла. Попробуйте открыть карточку заново из каталога.</Alert>
       </PageShell>
     );
   }
 
-  const isLoading = detailQuery.isLoading || playlistQuery.isLoading;
+  if (!routeQuery.isLoading && !title) {
+    return (
+      <PageShell title="Тайтл не найден">
+        <Alert severity="error">Тайтл не найден или маршрут повреждён.</Alert>
+      </PageShell>
+    );
+  }
+
+  const isLoading = routeQuery.isLoading || (Boolean(titleId && selectedSourceId) && (detailQuery.isLoading || playlistQuery.isLoading));
   const descriptionHtml = detailQuery.data ? sanitizeHtml(detailQuery.data.description) : '';
   const metadataItems = detailQuery.data ? [
     { label: 'Эпизоды', value: detailQuery.data.episodeLabel || '—' },
@@ -122,8 +176,8 @@ export function TitlePage() {
 
   return (
     <PageShell
-      title={detailQuery.data?.title ?? 'Тайтл'}
-      subtitle={detailQuery.data?.originalTitle || 'Страница просмотра с player + metadata above the fold.'}
+      title={detailQuery.data?.title ?? title?.title ?? 'Тайтл'}
+      subtitle={detailQuery.data?.originalTitle || title?.originalTitle || 'Страница просмотра тайтла.'}
       isLoading={isLoading}
       banner={
         detailQuery.isError ? (
@@ -134,170 +188,226 @@ export function TitlePage() {
       }
     >
       <Stack spacing={3}>
-      {detailQuery.data ? (
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, lg: 8 }}>
-            <Card>
-              <Box sx={{ aspectRatio: '16 / 9', backgroundColor: 'common.black' }}>
-                {currentEpisode ? (
-                  <video
-                    key={currentEpisode.id}
-                    controls
-                    playsInline
-                    poster={currentEpisode.preview}
-                    style={{ width: '100%', height: '100%' }}
-                    onPlay={() =>
-                      trackEvent('playback_start', {
-                        titleId: detailQuery.data.id,
-                        episodeId: currentEpisode.id,
-                      })
-                    }
-                  >
-                    <source src={currentEpisode.hd} type="video/mp4" />
-                    <source src={currentEpisode.std} type="video/mp4" />
-                  </video>
-                ) : (
-                  <Stack sx={{ width: '100%', height: '100%' }} alignItems="center" justifyContent="center">
-                    {playlistQuery.isLoading ? <CircularProgress /> : <Alert severity="info">Видео пока недоступно.</Alert>}
-                  </Stack>
-                )}
-              </Box>
-            </Card>
+        {detailQuery.data ? (
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, lg: 8 }}>
+              <Card>
+                <Box sx={{ aspectRatio: '16 / 9', backgroundColor: 'common.black' }}>
+                  {currentEpisode?.playbackUnsupported || detailQuery.data.playbackUnsupported ? (
+                    <Stack sx={{ width: '100%', height: '100%', p: 2 }} alignItems="center" justifyContent="center">
+                      <Alert severity="info">{playbackMessage}</Alert>
+                    </Stack>
+                  ) : currentPlayerUrl ? (
+                    <Box
+                      component="iframe"
+                      src={currentPlayerUrl}
+                      title={`${detailQuery.data.title} player`}
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
+                      sx={{ width: '100%', height: '100%', border: 0 }}
+                    />
+                  ) : currentEpisode ? (
+                    <video
+                      key={currentEpisode.id}
+                      controls
+                      playsInline
+                      poster={currentEpisode.preview}
+                      style={{ width: '100%', height: '100%' }}
+                      onPlay={() =>
+                        trackEvent('playback_start', {
+                          titleId: detailQuery.data.id,
+                          episodeId: currentEpisode.id,
+                          sourceId: detailQuery.data.selectedSourceId,
+                        })
+                      }
+                    >
+                      <source src={currentEpisode.hd} type="video/mp4" />
+                      <source src={currentEpisode.std} type="video/mp4" />
+                    </video>
+                  ) : (
+                    <Stack sx={{ width: '100%', height: '100%' }} alignItems="center" justifyContent="center">
+                      {playlistQuery.isLoading ? <CircularProgress /> : <Alert severity="info">Видео пока недоступно.</Alert>}
+                    </Stack>
+                  )}
+                </Box>
+              </Card>
 
-            {playlistQuery.data && playlistQuery.data.length > 0 ? (
-              <Card sx={{ mt: 3 }}>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Typography variant="h6">Эпизоды</Typography>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+              {detailQuery.data.sources.length > 1 ? (
+                <Card sx={{ mt: 3 }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Typography variant="h6">Источник</Typography>
                       <FormControl fullWidth size="small">
-                        <InputLabel id="episode-select-label">Эпизод</InputLabel>
+                        <InputLabel id="source-select-label">Плеер</InputLabel>
                         <Select
-                          labelId="episode-select-label"
-                          label="Эпизод"
-                          value={currentEpisode?.id ?? ''}
+                          labelId="source-select-label"
+                          label="Плеер"
+                          value={selectedSourceId ?? ''}
                           onChange={(event) => {
-                            const value = event.target.value;
-                            if (!value) return;
-                            selectEpisode(value);
-                          }}
-                          MenuProps={{
-                            PaperProps: {
-                              sx: {
-                                maxHeight: 360,
-                              },
-                            },
+                            const nextSourceId = event.target.value as CatalogSourceId;
+                            setSelectedSourceIdState(nextSourceId);
+                            setSelectedEpisodeState(null);
                           }}
                         >
-                          {playlistQuery.data.map((episode) => (
-                            <MenuItem key={episode.id} value={episode.id}>
-                              {episode.name}
+                          {detailQuery.data.sources.map((source) => (
+                            <MenuItem key={source.sourceId} value={source.sourceId}>
+                              {getSourceLabel(source.sourceId)}{source.episodeLabel ? ` — ${source.episodeLabel}` : ''}
                             </MenuItem>
                           ))}
                         </Select>
                       </FormControl>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-                      <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                        <Button
-                          variant="outlined"
-                          disabled={!previousEpisode}
-                          onClick={() => {
-                            if (!previousEpisode) return;
-                            selectEpisode(previousEpisode.id);
-                          }}
-                          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
-                        >
-                          Назад
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          disabled={!nextEpisode}
-                          onClick={() => {
-                            if (!nextEpisode) return;
-                            selectEpisode(nextEpisode.id);
-                          }}
-                          sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
-                        >
-                          Далее
-                        </Button>
+              {detailQuery.data.selectedSourceId === 'anidub' && currentPlayerUrl ? (
+                <Alert severity="info" sx={{ mt: 3 }}>
+                  Переключение серий для AniDub доступно внутри встроенного плеера.
+                </Alert>
+              ) : null}
+
+              {playlistQuery.data && playlistQuery.data.length > 0 && detailQuery.data.selectedSourceId !== 'anidub' ? (
+                <Card sx={{ mt: 3 }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Typography variant="h6">Эпизоды</Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="episode-select-label">Эпизод</InputLabel>
+                          <Select
+                            labelId="episode-select-label"
+                            label="Эпизод"
+                            value={currentEpisode?.id ?? ''}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (!value) return;
+                              selectEpisode(value);
+                            }}
+                            MenuProps={{
+                              PaperProps: {
+                                sx: {
+                                  maxHeight: 360,
+                                },
+                              },
+                            }}
+                          >
+                            {playlistQuery.data.map((episode) => (
+                              <MenuItem key={episode.id} value={episode.id}>
+                                {episode.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+
+                        <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                          <Button
+                            variant="outlined"
+                            disabled={!previousEpisode}
+                            onClick={() => {
+                              if (!previousEpisode) return;
+                              selectEpisode(previousEpisode.id);
+                            }}
+                            sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+                          >
+                            Назад
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            disabled={!nextEpisode}
+                            onClick={() => {
+                              if (!nextEpisode) return;
+                              selectEpisode(nextEpisode.id);
+                            }}
+                            sx={{ flex: { xs: 1, sm: '0 0 auto' } }}
+                          >
+                            Далее
+                          </Button>
+                        </Stack>
                       </Stack>
                     </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-            ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
+            </Grid>
+
+            <Grid size={{ xs: 12, lg: 4 }}>
+              <Stack spacing={3}>
+                <Card>
+                  <CardContent>
+                    <Stack spacing={2.5}>
+                      <Box
+                        component="img"
+                        src={detailQuery.data.poster}
+                        alt={detailQuery.data.title}
+                        sx={{ width: '100%', borderRadius: 4, aspectRatio: '57 / 75', objectFit: 'cover' }}
+                      />
+                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        <Chip label={detailQuery.data.status} />
+                        <Chip label={detailQuery.data.type} />
+                        <Chip label={detailQuery.data.year} />
+                        {detailQuery.data.sources.map((source) => (
+                          <Chip
+                            key={source.sourceId}
+                            label={getSourceLabel(source.sourceId)}
+                            variant={source.sourceId === detailQuery.data.selectedSourceId ? 'filled' : 'outlined'}
+                          />
+                        ))}
+                        <Chip label={`★ ${formatScore(detailQuery.data.averageScore)}`} />
+                      </Stack>
+                      <Stack spacing={0.75}>
+                        <Typography variant="h4">{detailQuery.data.title}</Typography>
+                        {detailQuery.data.originalTitle ? (
+                          <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
+                        ) : null}
+                      </Stack>
+                      <Stack spacing={1.25}>
+                        {metadataItems.map((item) => (
+                          <Stack key={item.label} direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+                            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 96 }}>
+                              {item.label}
+                            </Typography>
+                            <Typography variant="body2" sx={{ textAlign: 'right', flex: 1 }}>
+                              {item.value}
+                            </Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      <Button
+                        startIcon={favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                        onClick={() => {
+                          const next = toggleFavorite(detailQuery.data);
+                          setFavorite(next);
+                          trackEvent('favorite_toggle', { titleId: detailQuery.data.id, value: next, sourceId: detailQuery.data.selectedSourceId });
+                        }}
+                      >
+                        {favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Typography variant="h6">Описание</Typography>
+                      <Box dangerouslySetInnerHTML={{ __html: descriptionHtml }} sx={{ color: 'text.secondary', lineHeight: 1.7 }} />
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            </Grid>
           </Grid>
+        ) : null}
 
-          <Grid size={{ xs: 12, lg: 4 }}>
-            <Stack spacing={3}>
-              <Card>
-                <CardContent>
-                  <Stack spacing={2.5}>
-                    <Box
-                      component="img"
-                      src={detailQuery.data.poster}
-                      alt={detailQuery.data.title}
-                      sx={{ width: '100%', borderRadius: 4, aspectRatio: '57 / 75', objectFit: 'cover' }}
-                    />
-                    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                      <Chip label={detailQuery.data.status} />
-                      <Chip label={detailQuery.data.type} />
-                      <Chip label={detailQuery.data.year} />
-                      <Chip label={`★ ${formatScore(detailQuery.data.averageScore)}`} />
-                    </Stack>
-                    <Stack spacing={0.75}>
-                      <Typography variant="h4">{detailQuery.data.title}</Typography>
-                      {detailQuery.data.originalTitle ? (
-                        <Typography color="text.secondary">{detailQuery.data.originalTitle}</Typography>
-                      ) : null}
-                    </Stack>
-                    <Stack spacing={1.25}>
-                      {metadataItems.map((item) => (
-                        <Stack key={item.label} direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
-                          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 96 }}>
-                            {item.label}
-                          </Typography>
-                          <Typography variant="body2" sx={{ textAlign: 'right', flex: 1 }}>
-                            {item.value}
-                          </Typography>
-                        </Stack>
-                      ))}
-                    </Stack>
-                    <Button
-                      startIcon={favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                      onClick={() => {
-                        const next = toggleFavorite(detailQuery.data);
-                        setFavorite(next);
-                        trackEvent('favorite_toggle', { titleId: detailQuery.data.id, value: next });
-                      }}
-                    >
-                      {favorite ? 'Убрать из избранного' : 'Добавить в избранное'}
-                    </Button>
-                  </Stack>
-                </CardContent>
-              </Card>
+        {relatedQuery.data && relatedQuery.data.length > 0 ? (
+          <Stack spacing={2}>
+            <Typography variant="h4">Похожие тайтлы</Typography>
+            <TitleGrid titles={relatedQuery.data} />
+          </Stack>
+        ) : null}
 
-              <Card>
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Typography variant="h6">Описание</Typography>
-                    <Box dangerouslySetInnerHTML={{ __html: descriptionHtml }} sx={{ color: 'text.secondary', lineHeight: 1.7 }} />
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Stack>
-          </Grid>
-        </Grid>
-      ) : null}
-
-      {relatedQuery.data && relatedQuery.data.length > 0 ? (
-        <Stack spacing={2}>
-          <Typography variant="h4">Похожие тайтлы</Typography>
-          <TitleGrid titles={relatedQuery.data} />
-        </Stack>
-      ) : null}
-
-      {snapshotQuery.data ? <CatalogFreshness generatedAt={snapshotQuery.data.generatedAt} /> : null}
+        {snapshotQuery.data ? <CatalogFreshness generatedAt={snapshotQuery.data.generatedAt} /> : null}
       </Stack>
     </PageShell>
   );

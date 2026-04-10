@@ -1,11 +1,21 @@
 import { Card, CardActionArea, CardContent, CardMedia, Chip, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import type { CatalogTitle } from '../../entities/catalog';
+import type { CatalogSourceId, CatalogTitle } from '../../entities/catalog';
 import { titlePath } from '../lib/routes';
 import { formatScore } from '../lib/text';
 
 interface TitleCardProps {
   title: CatalogTitle;
+}
+
+function getSourceLabel(sourceId: CatalogSourceId): string {
+  return sourceId === 'anidub' ? 'AniDub' : 'AnimeTop';
+}
+
+function getSourcesLabel(title: CatalogTitle): string {
+  if (title.sources.length === 0) return 'Источник';
+  if (title.sources.length === 1) return getSourceLabel(title.sources[0].sourceId);
+  return title.sources.map((source) => getSourceLabel(source.sourceId)).join(' + ');
 }
 
 export function TitleCard({ title }: TitleCardProps) {
@@ -23,6 +33,7 @@ export function TitleCard({ title }: TitleCardProps) {
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
               <Chip label={title.type || 'Тайтл'} size="small" />
               <Chip label={title.status} size="small" color={title.status === 'Онгоинг' ? 'secondary' : 'default'} />
+              <Chip label={getSourcesLabel(title)} size="small" variant="outlined" />
               <Chip label={`★ ${formatScore(title.averageScore)}`} size="small" />
             </Stack>
             <Typography variant="h6" component="h2" sx={{ lineHeight: 1.25 }}>

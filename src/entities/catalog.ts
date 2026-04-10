@@ -1,7 +1,24 @@
 export type TitleStatus = 'Анонс' | 'Онгоинг' | 'Завершено';
+export type CatalogSourceId = 'animetop' | 'anidub';
+
+export interface CatalogTitleSource {
+  sourceId: CatalogSourceId;
+  sourceTitleId: string;
+  legacyTitleId: string;
+  legacySlug: string;
+  title: string;
+  originalTitle: string;
+  fullTitle: string;
+  episodeLabel: string;
+  status: TitleStatus;
+  isAnnouncement: boolean;
+  releasedEpisodes: number | null;
+  totalEpisodes: number | null;
+  latestRank: number;
+}
 
 export interface CatalogTitle {
-  id: number;
+  id: string;
   slug: string;
   title: string;
   originalTitle: string;
@@ -26,6 +43,8 @@ export interface CatalogTitle {
   totalEpisodes: number | null;
   latestRank: number;
   searchText: string;
+  primarySourceId: CatalogSourceId;
+  sources: CatalogTitleSource[];
 }
 
 export interface CatalogFilters {
@@ -44,6 +63,10 @@ export interface CatalogSnapshot {
 
 export interface TitleDetail extends CatalogTitle {
   description: string;
+  selectedSourceId: CatalogSourceId;
+  playerUrl?: string;
+  playbackUnsupported?: boolean;
+  playbackMessage?: string;
 }
 
 export interface PlaylistEpisode {
@@ -52,6 +75,9 @@ export interface PlaylistEpisode {
   hd: string;
   std: string;
   preview: string;
+  playerUrl?: string;
+  playbackUnsupported?: boolean;
+  playbackMessage?: string;
 }
 
 export interface CatalogParams {
