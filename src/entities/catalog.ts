@@ -8,7 +8,6 @@ export interface CatalogTitleSource {
   legacySlug: string;
   title: string;
   originalTitle: string;
-  fullTitle: string;
   episodeLabel: string;
   status: TitleStatus;
   isAnnouncement: boolean;
@@ -22,15 +21,12 @@ export interface CatalogTitle {
   slug: string;
   title: string;
   originalTitle: string;
-  fullTitle: string;
   episodeLabel: string;
-  badges: string[];
   year: string;
   genres: string[];
   type: string;
   director: string;
   poster: string;
-  screens: string[];
   shortDescription: string;
   rating: number;
   votes: number;

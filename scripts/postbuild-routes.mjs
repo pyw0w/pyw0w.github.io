@@ -24,6 +24,20 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function detectBasePath(template) {
+  const match = template.match(/src="([^"]*\/)assets\//);
+  return match ? match[1] : '/';
+}
+
+function injectCatalogPreload(template, basePath) {
+  if (template.includes('rel="preload"') && template.includes('/data/catalog.json')) {
+    return template;
+  }
+  const href = `${basePath}data/catalog.json`;
+  const preload = `    <link rel="preload" as="fetch" type="application/json" crossorigin="anonymous" href="${href}" />\n  `;
+  return template.replace(/(<\/head>)/i, `${preload}$1`);
+}
+
 function injectMeta(template, title, description = 'Современный каталог аниме с новинками, поиском, избранным и встроенным плеером.') {
   const safeTitle = escapeHtml(title);
   const safeDescription = escapeHtml(description);
@@ -99,7 +113,10 @@ async function buildTitleRoutes(template) {
 }
 
 async function main() {
-  const template = await readFile(indexPath, 'utf8');
+  const rawTemplate = await readFile(indexPath, 'utf8');
+  const basePath = detectBasePath(rawTemplate);
+  const template = injectCatalogPreload(rawTemplate, basePath);
+  await writeFile(indexPath, template);
   await ensureFileCopy(source404Path, dist404Path);
   await buildStaticShellRoutes(template);
   await buildTitleRoutes(template);

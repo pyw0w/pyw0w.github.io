@@ -49,6 +49,8 @@ const STATUS_VALUES = ['Анонс', 'Онгоинг', 'Завершено'];
 const TRENDING_MIN_VOTES = 50;
 const TRENDING_ONGOING_BOOST = 1.05;
 const TRUSTED_ANIDUB_PLAYER_HOSTS = new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']);
+const SEARCH_TEXT_MAX_LENGTH = 400;
+const SEARCH_DESCRIPTION_MAX_LENGTH = 240;
 const CYRILLIC_MAP = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
   к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
@@ -221,8 +223,12 @@ function normalizeSearchText(value) {
     .trim();
 }
 
-function buildSearchText(parts) {
-  return normalizeSearchText(parts.filter(Boolean).join(' '));
+function buildSearchText(parts, maxLength = SEARCH_TEXT_MAX_LENGTH) {
+  const normalized = normalizeSearchText(parts.filter(Boolean).join(' '));
+  if (normalized.length <= maxLength) return normalized;
+  const clipped = normalized.slice(0, maxLength);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return lastSpace > maxLength * 0.6 ? clipped.slice(0, lastSpace) : clipped;
 }
 
 function buildTitleId(sourceId, sourceTitleId) {
@@ -258,15 +264,12 @@ function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
     slug: slugify(parsed.originalTitle || parsed.title, rawItem.id),
     title: parsed.title,
     originalTitle: parsed.originalTitle,
-    fullTitle: String(rawItem.title ?? ''),
     episodeLabel: parsed.episodeLabel,
-    badges: parsed.badges,
     year: String(rawItem.year ?? ''),
     genres,
     type: String(rawItem.type ?? '').trim(),
     director: String(rawItem.director ?? '').trim(),
     poster: ensureHttps(rawItem.urlImagePreview),
-    screens: Array.isArray(rawItem.screenImage) ? rawItem.screenImage.map(ensureHttps).filter(Boolean) : [],
     shortDescription: truncateText(plainDescription, 240),
     rating,
     votes,
@@ -284,7 +287,8 @@ function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
       genres.join(' '),
       rawItem.type,
       rawItem.year,
-      plainDescription,
+      String(rawItem.director ?? ''),
+      plainDescription.slice(0, SEARCH_DESCRIPTION_MAX_LENGTH),
     ]),
   };
 }
@@ -371,9 +375,7 @@ function normalizeAniDubItem(rawItem, latestRank) {
   const originalTitle = String(xfields.orig_title ?? '').trim();
   const title = String(rawItem.title ?? '').trim();
   const sourceTitleId = String(rawItem.id);
-  const season = parseAniDubNumber(xfields.addseason);
   const episodeLabel = deriveAniDubEpisodeLabel(releasedEpisodes, totalEpisodes);
-  const badges = season && season > 1 ? [`Сезон ${season}`] : [];
 
   return {
     id: buildTitleId('anidub', sourceTitleId),
@@ -382,15 +384,12 @@ function normalizeAniDubItem(rawItem, latestRank) {
     slug: slugify(originalTitle || rawItem.alt_name || title, sourceTitleId),
     title,
     originalTitle,
-    fullTitle: title,
     episodeLabel,
-    badges,
     year: String(xfields.year ?? '').trim(),
     genres,
     type: inferAniDubType(title, xfields),
     director: String(xfields.director ?? '').trim(),
     poster: buildAniDubPosterUrl(xfields),
-    screens: [],
     shortDescription: truncateText(plainDescription, 240),
     rating: 0,
     votes: 0,
@@ -409,7 +408,7 @@ function normalizeAniDubItem(rawItem, latestRank) {
       genres.join(' '),
       xfields.year,
       xfields.director,
-      plainDescription,
+      plainDescription.slice(0, SEARCH_DESCRIPTION_MAX_LENGTH),
     ]),
   };
 }
@@ -598,7 +597,6 @@ function buildTitleSource(item) {
     legacySlug: item.slug,
     title: item.title,
     originalTitle: item.originalTitle,
-    fullTitle: item.fullTitle,
     episodeLabel: item.episodeLabel,
     status: item.status,
     isAnnouncement: item.isAnnouncement,
@@ -617,15 +615,12 @@ function buildCanonicalItem(items) {
     slug: primary.slug,
     title: primary.title,
     originalTitle: primary.originalTitle,
-    fullTitle: primary.fullTitle,
     episodeLabel: primary.episodeLabel,
-    badges: uniqueStrings(orderedItems.flatMap((item) => item.badges)),
     year: primary.year,
     genres: uniqueStrings(orderedItems.flatMap((item) => item.genres)),
     type: primary.type,
     director: primary.director,
     poster: primary.poster,
-    screens: uniqueStrings(orderedItems.flatMap((item) => item.screens)),
     shortDescription: primary.shortDescription,
     rating: primary.rating,
     votes: primary.votes,
@@ -637,7 +632,7 @@ function buildCanonicalItem(items) {
     releasedEpisodes: primary.releasedEpisodes,
     totalEpisodes: primary.totalEpisodes,
     latestRank: Math.min(...orderedItems.map(getProviderSortRank)),
-    searchText: normalizeSearchText(orderedItems.map((item) => item.searchText).join(' ')),
+    searchText: buildSearchText([orderedItems.map((item) => item.searchText).join(' ')]),
     primarySourceId: primary.sourceId,
     sources: orderedItems.map(buildTitleSource),
   };
