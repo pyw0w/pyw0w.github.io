@@ -4,7 +4,7 @@ import type { CatalogTitle } from '../../entities/catalog';
 import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getCatalogSnapshot, getHomeFeed } from '../../shared/api/catalog';
-import { getHistory, getTitleStorageIds } from '../../shared/storage/local';
+import { getTitleStorageIds, useHistory } from '../../shared/storage/local';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
@@ -20,13 +20,14 @@ export function HomePage() {
   const hero = homeFeedQuery.data?.hero;
   const latest = homeFeedQuery.data?.latest ?? [];
   const trending = homeFeedQuery.data?.trending ?? [];
+  const history = useHistory();
   const recentHistory = useMemo(() => {
     if (!snapshotQuery.data) return [];
     const itemsById = new Map(
       snapshotQuery.data.items.flatMap((item) => getTitleStorageIds(item).map((id) => [id, item] as const)),
     );
     const seen = new Set<string>();
-    return getHistory()
+    return history
       .map((entry) => itemsById.get(entry.id))
       .filter((item): item is CatalogTitle => Boolean(item))
       .filter((item) => {
@@ -35,7 +36,7 @@ export function HomePage() {
         return true;
       })
       .slice(0, HOME_HISTORY_LIMIT);
-  }, [snapshotQuery.data]);
+  }, [history, snapshotQuery.data]);
 
   return (
     <PageShell

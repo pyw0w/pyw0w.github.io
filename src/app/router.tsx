@@ -4,7 +4,7 @@ import { AppLayout } from './layout/AppLayout';
 import { PageShell } from '../shared/ui/PageShell';
 
 const HomePage = lazy(() => import('../features/home/HomePage').then((module) => ({ default: module.HomePage })));
-const SearchPage = lazy(() => import('../features/search/SearchPage').then((module) => ({ default: module.SearchPage })));
+const SearchCatalogPage = lazy(() => import('../features/search/SearchCatalogPage').then((module) => ({ default: module.SearchCatalogPage })));
 const FavoritesPage = lazy(() => import('../features/favorites/FavoritesPage').then((module) => ({ default: module.FavoritesPage })));
 const HistoryPage = lazy(() => import('../features/history/HistoryPage').then((module) => ({ default: module.HistoryPage })));
 const ChangelogPage = lazy(() => import('../features/changelog/ChangelogPage').then((module) => ({ default: module.ChangelogPage })));
@@ -35,7 +35,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'search',
-        element: renderLazyPage(SearchPage),
+        element: renderLazyPage(SearchCatalogPage),
       },
       {
         path: 'favorites',

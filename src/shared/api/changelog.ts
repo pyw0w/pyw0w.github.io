@@ -32,7 +32,11 @@ export async function getChangelogSnapshot(): Promise<ChangelogSnapshot> {
         }
         return response.json();
       })
-      .then((payload) => changelogSchema.parse(payload));
+      .then((payload) => changelogSchema.parse(payload))
+      .catch((error) => {
+        changelogPromise = null;
+        throw error;
+      });
   }
 
   return changelogPromise;

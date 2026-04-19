@@ -26,11 +26,12 @@ import { formatGenres, formatScore, sanitizeHtml } from '../../shared/lib/text';
 import {
   getPreferredSourceId,
   getSelectedEpisode,
-  isFavorite,
+  getTitleStorageIds,
   pushHistory,
   setPreferredSourceId,
   setSelectedEpisode,
   toggleFavorite,
+  useFavorites,
 } from '../../shared/storage/local';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
@@ -58,8 +59,8 @@ function getTrustedEmbedUrl(url: string | undefined): string {
 export function TitlePage() {
   const params = useParams();
   const [selectedEpisode, setSelectedEpisodeState] = useState<string | null>(null);
-  const [favorite, setFavorite] = useState(false);
   const [selectedSourceId, setSelectedSourceIdState] = useState<CatalogSourceId | null>(null);
+  const favorites = useFavorites();
 
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
   const routeQuery = useQuery({
@@ -97,11 +98,16 @@ export function TitlePage() {
     enabled: Boolean(title),
   });
 
+  const favorite = useMemo(() => {
+    if (!title) return false;
+    const ids = new Set(getTitleStorageIds(title));
+    return favorites.some((item) => ids.has(item.id));
+  }, [favorites, title]);
+
   useEffect(() => {
     if (!title) return;
     pushHistory(title);
-    setFavorite(isFavorite(title));
-  }, [title]);
+  }, [title?.id]);
 
   useEffect(() => {
     if (!title) return;
@@ -117,13 +123,13 @@ export function TitlePage() {
 
     setSelectedSourceIdState(nextSourceId);
     setSelectedEpisodeState(null);
-  }, [routeQuery.data?.preferredSourceId, title]);
+  }, [routeQuery.data?.preferredSourceId, title?.id]);
 
   useEffect(() => {
     if (!title || !selectedSourceId) return;
     setPreferredSourceId(title.id, selectedSourceId);
     trackEvent('title_open', { titleId: title.id, slug: title.slug, sourceId: selectedSourceId });
-  }, [selectedSourceId, title]);
+  }, [selectedSourceId, title?.id, title?.slug]);
 
   useEffect(() => {
     if (!playlistQuery.data || !detailQuery.data || !selectedSourceId) return;
@@ -145,7 +151,7 @@ export function TitlePage() {
     if (!hasSavedEpisode && nextEpisode) {
       setSelectedEpisode(detailQuery.data.id, selectedSourceId, nextEpisode);
     }
-  }, [detailQuery.data, playlistQuery.data, selectedSourceId]);
+  }, [detailQuery.data?.id, playlistQuery.data, selectedSourceId]);
 
   const currentEpisode = useMemo(
     () => playlistQuery.data?.find((episode) => episode.id === selectedEpisode) ?? playlistQuery.data?.[0],
@@ -192,7 +198,10 @@ export function TitlePage() {
   }
 
   const isLoading = routeQuery.isLoading || (Boolean(titleId && selectedSourceId) && (detailQuery.isLoading || playlistQuery.isLoading));
-  const descriptionHtml = detailQuery.data ? sanitizeHtml(detailQuery.data.description) : '';
+  const descriptionHtml = useMemo(
+    () => (detailQuery.data ? sanitizeHtml(detailQuery.data.description) : ''),
+    [detailQuery.data?.description],
+  );
   const metadataItems = detailQuery.data ? [
     { label: 'Эпизоды', value: detailQuery.data.episodeLabel || '—' },
     { label: 'Жанры', value: formatGenres(detailQuery.data.genres) || '—' },
@@ -229,6 +238,8 @@ export function TitlePage() {
                       title={`${detailQuery.data.title} player`}
                       allow="autoplay; fullscreen; picture-in-picture"
                       allowFullScreen
+                      referrerPolicy="no-referrer"
+                      sandbox="allow-scripts allow-same-origin allow-presentation"
                       sx={{ width: '100%', height: '100%', border: 0 }}
                     />
                   ) : currentEpisode ? (
@@ -365,6 +376,8 @@ export function TitlePage() {
                         component="img"
                         src={detailQuery.data.poster}
                         alt={detailQuery.data.title}
+                        loading="lazy"
+                        decoding="async"
                         sx={{ width: '100%', borderRadius: 4, aspectRatio: '57 / 75', objectFit: 'cover' }}
                       />
                       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -401,8 +414,8 @@ export function TitlePage() {
                       <Button
                         startIcon={favorite ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                         onClick={() => {
+                          if (!detailQuery.data) return;
                           const next = toggleFavorite(detailQuery.data);
-                          setFavorite(next);
                           trackEvent('favorite_toggle', { titleId: detailQuery.data.id, value: next, sourceId: detailQuery.data.selectedSourceId });
                         }}
                       >

@@ -20,7 +20,7 @@ import {
 import TuneIcon from '@mui/icons-material/Tune';
 import CloseIcon from '@mui/icons-material/Close';
 import { useSearchParams } from 'react-router-dom';
-import type { CatalogParams } from '../../entities/catalog';
+import type { CatalogParams, TitleStatus } from '../../entities/catalog';
 import {
   buildCatalogSearchParams,
   DEFAULT_CATALOG_PARAMS,
@@ -29,6 +29,7 @@ import {
   parseCatalogSearchParams,
 } from '../../shared/api/catalog';
 import { trackEvent } from '../../shared/analytics/events';
+import { useDebouncedValue } from '../../shared/lib/useDebouncedValue';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
@@ -68,10 +69,12 @@ function useCatalogParams(): CatalogParamsController {
 interface FilterControlsProps {
   params: CatalogParams;
   updateParams: (patch: Partial<CatalogParams>) => void;
+  searchInput: string;
+  onSearchInputChange: (value: string) => void;
   genres: string[];
   years: string[];
   types: string[];
-  statuses: string[];
+  statuses: TitleStatus[];
 }
 
 interface AppliedFilterChip {
@@ -96,13 +99,22 @@ function getAppliedFilterChips(params: CatalogParams): AppliedFilterChip[] {
   ].filter((value): value is AppliedFilterChip => Boolean(value));
 }
 
-function FilterControls({ params, updateParams, genres, years, types, statuses }: FilterControlsProps) {
+function FilterControls({
+  params,
+  updateParams,
+  searchInput,
+  onSearchInputChange,
+  genres,
+  years,
+  types,
+  statuses,
+}: FilterControlsProps) {
   return (
     <Stack spacing={2.5} sx={{ p: { xs: 0, md: 0 } }}>
       <TextField
         label="Поиск"
-        value={params.search}
-        onChange={(event) => updateParams({ search: event.target.value, page: 1 })}
+        value={searchInput}
+        onChange={(event) => onSearchInputChange(event.target.value)}
         placeholder="Название, жанр или оригинальное имя"
         fullWidth
       />
@@ -210,10 +222,23 @@ export function SearchCatalogPage({
   });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [draftParams, setDraftParams] = useState<CatalogParams>(params);
+  const [searchInput, setSearchInput] = useState<string>(params.search);
+  const [draftSearchInput, setDraftSearchInput] = useState<string>(params.search);
+  const debouncedSearchInput = useDebouncedValue(searchInput, 250);
+
+  useEffect(() => {
+    setSearchInput(params.search);
+  }, [params.search]);
+
+  useEffect(() => {
+    if (debouncedSearchInput === params.search) return;
+    updateParams({ search: debouncedSearchInput, page: 1 });
+  }, [debouncedSearchInput, params.search, updateParams]);
 
   useEffect(() => {
     if (!mobileOpen) return;
     setDraftParams(params);
+    setDraftSearchInput(params.search);
   }, [mobileOpen, params]);
 
   useEffect(() => {
@@ -234,18 +259,23 @@ export function SearchCatalogPage({
 
   function resetDraftParams() {
     setDraftParams(DEFAULT_CATALOG_PARAMS);
+    setDraftSearchInput(DEFAULT_CATALOG_PARAMS.search);
   }
 
   function applyDraftParams() {
-    applyParams({ ...draftParams, page: 1 });
+    applyParams({ ...draftParams, search: draftSearchInput, page: 1 });
+    setSearchInput(draftSearchInput);
     setMobileOpen(false);
   }
 
   function clearAppliedFilter(key: keyof CatalogParams) {
-    applyParams({ ...params, [key]: DEFAULT_CATALOG_PARAMS[key], page: 1 } as CatalogParams);
+    const patch: Partial<CatalogParams> = { [key]: DEFAULT_CATALOG_PARAMS[key], page: 1 };
+    if (key === 'search') setSearchInput(DEFAULT_CATALOG_PARAMS.search);
+    applyParams({ ...params, ...patch });
   }
 
   function clearAllAppliedFilters() {
+    setSearchInput(DEFAULT_CATALOG_PARAMS.search);
     applyParams(DEFAULT_CATALOG_PARAMS);
   }
 
@@ -254,6 +284,8 @@ export function SearchCatalogPage({
       <FilterControls
         params={params}
         updateParams={(patch) => updateParams({ ...patch, page: 1 })}
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
         genres={filters.genres}
         years={filters.years}
         types={filters.types}
@@ -267,13 +299,15 @@ export function SearchCatalogPage({
       <Stack spacing={1}>
         <Typography variant="h6">Фильтры</Typography>
         <Typography color="text.secondary">
-          Активно: {getActiveFiltersCount(draftParams)}
+          Активно: {getActiveFiltersCount({ ...draftParams, search: draftSearchInput })}
         </Typography>
       </Stack>
 
       <FilterControls
         params={draftParams}
         updateParams={(patch) => updateDraftParams({ ...patch, page: 1 })}
+        searchInput={draftSearchInput}
+        onSearchInputChange={setDraftSearchInput}
         genres={filters.genres}
         years={filters.years}
         types={filters.types}

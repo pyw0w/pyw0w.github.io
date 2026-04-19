@@ -63,24 +63,39 @@ export function AppLayout() {
               ) : null}
             </Stack>
 
-            <Stack direction="row" spacing={1.5} sx={{ display: { xs: 'none', md: 'flex' } }}>
-              {navItems.map((item) => (
-                <Typography
-                  key={item.to}
-                  component={RouterLink}
-                  to={item.to}
-                  sx={{
-                    color: activePath === item.to ? 'primary.main' : 'text.secondary',
-                    textDecoration: 'none',
-                    fontWeight: activePath === item.to ? 700 : 500,
-                  }}
-                >
-                  {item.label}
-                </Typography>
-              ))}
+            <Stack
+              component="nav"
+              aria-label="Основная навигация"
+              direction="row"
+              spacing={1.5}
+              sx={{ display: { xs: 'none', md: 'flex' } }}
+            >
+              {navItems.map((item) => {
+                const isActive = activePath === item.to;
+                return (
+                  <Typography
+                    key={item.to}
+                    component={RouterLink}
+                    to={item.to}
+                    aria-current={isActive ? 'page' : undefined}
+                    sx={{
+                      color: isActive ? 'primary.main' : 'text.secondary',
+                      textDecoration: 'none',
+                      fontWeight: isActive ? 700 : 500,
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                );
+              })}
             </Stack>
 
-            <IconButton color="inherit" sx={{ display: { xs: 'inline-flex', md: 'none' } }} onClick={() => setOpen(true)}>
+            <IconButton
+              color="inherit"
+              aria-label="Открыть меню"
+              sx={{ display: { xs: 'inline-flex', md: 'none' } }}
+              onClick={() => setOpen(true)}
+            >
               <MenuIcon />
             </IconButton>
           </Toolbar>
@@ -89,18 +104,22 @@ export function AppLayout() {
 
       <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
         <Box sx={{ width: 260, pt: 2 }} role="presentation">
-          <List>
-            {navItems.map((item) => (
-              <ListItemButton
-                key={item.to}
-                component={RouterLink}
-                to={item.to}
-                selected={activePath === item.to}
-                onClick={() => setOpen(false)}
-              >
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            ))}
+          <List component="nav" aria-label="Мобильное меню">
+            {navItems.map((item) => {
+              const isActive = activePath === item.to;
+              return (
+                <ListItemButton
+                  key={item.to}
+                  component={RouterLink}
+                  to={item.to}
+                  selected={isActive}
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={() => setOpen(false)}
+                >
+                  <ListItemText primary={item.label} />
+                </ListItemButton>
+              );
+            })}
           </List>
         </Box>
       </Drawer>

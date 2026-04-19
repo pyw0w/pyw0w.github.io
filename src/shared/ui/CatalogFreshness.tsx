@@ -50,6 +50,7 @@ export function CatalogFreshness({ generatedAt }: CatalogFreshnessProps) {
         right: { xs: 16, md: 24 },
         bottom: { xs: 16, md: 24 },
         zIndex: (theme) => theme.zIndex.tooltip - 1,
+        display: { xs: 'none', md: 'block' },
       }}
     >
       <Tooltip

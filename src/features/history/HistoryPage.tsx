@@ -7,11 +7,11 @@ import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { getCatalogSnapshot } from '../../shared/api/catalog';
-import { getHistory, getTitleStorageIds } from '../../shared/storage/local';
+import { getTitleStorageIds, useHistory } from '../../shared/storage/local';
 
 export function HistoryPage() {
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
-  const history = getHistory();
+  const history = useHistory();
   const titles = useMemo(() => {
     if (!snapshotQuery.data) return [];
     const itemsById = new Map(
