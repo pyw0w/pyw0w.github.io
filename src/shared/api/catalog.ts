@@ -49,7 +49,6 @@ const catalogTitleSourceSchema = z.object({
   legacySlug: z.string(),
   title: z.string(),
   originalTitle: z.string(),
-  fullTitle: z.string(),
   episodeLabel: z.string(),
   status: titleStatusSchema,
   isAnnouncement: z.boolean(),
@@ -63,15 +62,12 @@ const catalogTitleSchema = z.object({
   slug: z.string(),
   title: z.string(),
   originalTitle: z.string(),
-  fullTitle: z.string(),
   episodeLabel: z.string(),
-  badges: z.array(z.string()),
   year: z.string(),
   genres: z.array(z.string()),
   type: z.string(),
   director: z.string(),
   poster: z.string(),
-  screens: z.array(z.string()),
   shortDescription: z.string(),
   rating: z.number(),
   votes: z.number(),
@@ -394,11 +390,10 @@ function getScoreAffinity(left: CatalogTitle, right: CatalogTitle): number {
 
 function getRelatedCandidateScore(base: CatalogTitle, candidate: CatalogTitle): number {
   const genreScore = getOverlapRatio(base.genres, candidate.genres);
-  const titleScore = Math.max(
-    getTokenOverlapRatio(`${base.title} ${base.originalTitle}`, `${candidate.title} ${candidate.originalTitle}`),
-    getTokenOverlapRatio(base.fullTitle, candidate.fullTitle),
+  const titleScore = getTokenOverlapRatio(
+    `${base.title} ${base.originalTitle}`,
+    `${candidate.title} ${candidate.originalTitle}`,
   );
-  const badgeScore = getOverlapRatio(base.badges, candidate.badges);
   const descriptionScore = getTokenOverlapRatio(base.shortDescription, candidate.shortDescription);
   const yearScore = getYearProximityScore(base.year, candidate.year);
   const episodeScore = getEpisodeShapeScore(base, candidate);
@@ -417,7 +412,6 @@ function getRelatedCandidateScore(base: CatalogTitle, candidate: CatalogTitle): 
     + (sameDirector * 8)
     + (sameStatus * 6)
     + (episodeScore * 6)
-    + (badgeScore * 4)
     + (scoreAffinity * 4)
     + (descriptionScore * 2);
 }
@@ -442,7 +436,6 @@ function applySelectedSourceSummary(summary: CatalogTitle, source: CatalogTitleS
     ...summary,
     title: source.title || summary.title,
     originalTitle: source.originalTitle || summary.originalTitle,
-    fullTitle: source.fullTitle || summary.fullTitle,
     episodeLabel: source.episodeLabel || summary.episodeLabel,
     status: source.status || summary.status,
     isAnnouncement: source.isAnnouncement,
