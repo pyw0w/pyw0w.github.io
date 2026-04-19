@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Stack } from '@mui/material';
 import { PageShell } from '../../shared/ui/PageShell';
@@ -5,12 +6,16 @@ import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { EmptyState } from '../../shared/ui/EmptyState';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 import { getCatalogSnapshot } from '../../shared/api/catalog';
-import { getFavorites, matchesStoredTitleIds } from '../../shared/storage/local';
+import { matchesStoredTitleIds, useFavorites } from '../../shared/storage/local';
 
 export function FavoritesPage() {
   const snapshotQuery = useQuery({ queryKey: ['catalogSnapshot'], queryFn: getCatalogSnapshot });
-  const favoriteIds = new Set(getFavorites().map((item) => item.id));
-  const titles = snapshotQuery.data?.items.filter((item) => matchesStoredTitleIds(item, favoriteIds)) ?? [];
+  const favorites = useFavorites();
+  const favoriteIds = useMemo(() => new Set(favorites.map((item) => item.id)), [favorites]);
+  const titles = useMemo(
+    () => snapshotQuery.data?.items.filter((item) => matchesStoredTitleIds(item, favoriteIds)) ?? [],
+    [favoriteIds, snapshotQuery.data],
+  );
 
   return (
     <PageShell

@@ -17,6 +17,8 @@ const ANIMETOP_API_BASE = 'https://api.animetop.info/v1';
 const PAGE_SIZE = 24;
 const CATALOG_SORT_VALUES: CatalogParams['sort'][] = ['latest', 'trending', 'rating'];
 const STATUS_VALUES: TitleStatus[] = ['Анонс', 'Онгоинг', 'Завершено'];
+const titleStatusSchema = z.enum(['Анонс', 'Онгоинг', 'Завершено']);
+const catalogSourceIdSchema = z.enum(['animetop', 'anidub']);
 
 export const DEFAULT_CATALOG_PARAMS: CatalogParams = {
   page: 1,
@@ -41,7 +43,7 @@ export interface ResolvedTitleRoute {
 }
 
 const catalogTitleSourceSchema = z.object({
-  sourceId: z.enum(['animetop', 'anidub']),
+  sourceId: catalogSourceIdSchema,
   sourceTitleId: z.string(),
   legacyTitleId: z.string(),
   legacySlug: z.string(),
@@ -49,7 +51,7 @@ const catalogTitleSourceSchema = z.object({
   originalTitle: z.string(),
   fullTitle: z.string(),
   episodeLabel: z.string(),
-  status: z.custom<TitleStatus>(),
+  status: titleStatusSchema,
   isAnnouncement: z.boolean(),
   releasedEpisodes: z.number().nullable(),
   totalEpisodes: z.number().nullable(),
@@ -77,12 +79,12 @@ const catalogTitleSchema = z.object({
   trendingScore: z.number(),
   timer: z.number(),
   isAnnouncement: z.boolean(),
-  status: z.custom<TitleStatus>(),
+  status: titleStatusSchema,
   releasedEpisodes: z.number().nullable(),
   totalEpisodes: z.number().nullable(),
   latestRank: z.number(),
-  searchText: z.string().transform((value) => normalizeSearchText(value)),
-  primarySourceId: z.enum(['animetop', 'anidub']),
+  searchText: z.string(),
+  primarySourceId: catalogSourceIdSchema,
   sources: z.array(catalogTitleSourceSchema),
 });
 
@@ -93,7 +95,7 @@ const catalogSnapshotSchema = z.object({
     genres: z.array(z.string()),
     years: z.array(z.string()),
     types: z.array(z.string()),
-    statuses: z.array(z.custom<TitleStatus>()),
+    statuses: z.array(titleStatusSchema),
   }),
   items: z.array(catalogTitleSchema),
 });
@@ -197,12 +199,8 @@ function buildQuery(params: Record<string, string>): string {
 }
 
 export function getBasePath(): string {
-  if (typeof window === 'undefined') return import.meta.env.BASE_URL.replace(/\/$/, '');
   const configuredBase = import.meta.env.BASE_URL.replace(/\/$/, '');
-  if (configuredBase && configuredBase !== '/') return configuredBase;
-  const segments = window.location.pathname.split('/').filter(Boolean);
-  if (segments[0] === 'pyw0w.github.io') return '/pyw0w.github.io';
-  return '';
+  return configuredBase && configuredBase !== '/' ? configuredBase : '';
 }
 
 function normalizeSearchText(value: string): string {
@@ -254,7 +252,7 @@ export function normalizeCatalogParams(
 
   return {
     page: normalizeCatalogPage(params.page),
-    search: normalizeSearchText(params.search ?? DEFAULT_CATALOG_PARAMS.search),
+    search: String(params.search ?? DEFAULT_CATALOG_PARAMS.search).trim(),
     genre: normalizeCatalogFilterValue(params.genre, filters?.genres),
     status: normalizeCatalogFilterValue(params.status, filters?.statuses ?? STATUS_VALUES),
     year: normalizeCatalogFilterValue(params.year, filters?.years),
@@ -299,7 +297,11 @@ export async function getCatalogSnapshot(): Promise<CatalogSnapshot> {
         }
         return response.json();
       })
-      .then((payload) => catalogSnapshotSchema.parse(payload));
+      .then((payload) => catalogSnapshotSchema.parse(payload))
+      .catch((error) => {
+        snapshotPromise = null;
+        throw error;
+      });
   }
 
   return snapshotPromise;
@@ -623,7 +625,7 @@ export async function getTitleDetail(id: string, preferredSourceId?: CatalogSour
   return getAnimeTopTitleDetail(summary, source);
 }
 
-async function getAnimeTopPlaylist(summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
+async function getAnimeTopPlaylist(_summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
   const response = await fetch(`${ANIMETOP_API_BASE}/playlist`, {
     method: 'POST',
     headers: {

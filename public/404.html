@@ -9,9 +9,8 @@
       const path = location.pathname.replace(/\/$/, '');
       const firstSegment = path.split('/').filter(Boolean)[0];
       const base = firstSegment && !path.endsWith('/404.html') ? `/${firstSegment}/` : '/';
-      const redirect = `${location.origin}${path}${location.search}${location.hash}`;
       sessionStorage.setItem('spa-redirect', `${location.pathname}${location.search}${location.hash}`);
-      location.replace(`${location.origin}${base}?redirect=${encodeURIComponent(redirect)}`);
+      location.replace(`${location.origin}${base}`);
     </script>
   </head>
   <body></body>

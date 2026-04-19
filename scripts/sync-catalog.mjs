@@ -1,6 +1,40 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
+
+const MAX_FETCH_ATTEMPTS = 3;
+const FETCH_BACKOFF_MS = 1000;
+
+const animeTopRawItemSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  title: z.string().catch(''),
+  description: z.string().catch(''),
+  genre: z.string().catch(''),
+  year: z.union([z.string(), z.number()]).transform(String).catch(''),
+  urlImagePreview: z.string().catch(''),
+  rating: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  votes: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  timer: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  type: z.string().catch(''),
+  director: z.string().catch(''),
+  screenImage: z.array(z.string()).catch([]),
+}).passthrough();
+
+const animeTopPageSchema = z.object({
+  state: z.object({ count: z.union([z.string(), z.number()]).transform(Number).catch(0) }).passthrough().default({ count: 0 }),
+  data: z.array(z.unknown()).catch([]),
+}).passthrough();
+
+const aniDubRawItemSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  title: z.string().catch(''),
+  alt_name: z.string().catch(''),
+  short_story: z.string().catch(''),
+  full_story: z.string().catch(''),
+  descr: z.string().catch(''),
+  xfields: z.string().catch(''),
+}).passthrough();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -410,46 +444,85 @@ function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.
   };
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  if (!response.ok) {
-    throw new Error(`Request failed for ${url}: ${response.status}`);
+async function fetchJson(url) {
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed for ${url}: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      if (attempt === MAX_FETCH_ATTEMPTS) break;
+      const backoff = FETCH_BACKOFF_MS * (2 ** (attempt - 1));
+      console.warn(`Fetch attempt ${attempt}/${MAX_FETCH_ATTEMPTS} failed for ${url}: ${error.message}. Retrying in ${backoff}ms.`);
+      await delay(backoff);
+    }
   }
 
-  return response.json();
+  throw lastError;
 }
 
 async function fetchAnimeTopPage(page) {
-  return fetchJson(`${ANIMETOP_API_BASE}/last?page=${page}&quantity=${PAGE_SIZE}`);
+  const payload = await fetchJson(`${ANIMETOP_API_BASE}/last?page=${page}&quantity=${PAGE_SIZE}`);
+  const parsed = animeTopPageSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(`Invalid AnimeTop response for page ${page}: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
+function parseAnimeTopItem(rawItem) {
+  const parsed = animeTopRawItemSchema.safeParse(rawItem);
+  if (!parsed.success) {
+    console.warn('Skipping invalid AnimeTop item:', parsed.error.issues.map((issue) => issue.message).join('; '));
+    return null;
+  }
+  return parsed.data;
 }
 
 async function fetchAnimeTopItems() {
   const firstPage = await fetchAnimeTopPage(1);
   const totalCount = Number(firstPage?.state?.count) || 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const allRawItems = [...(Array.isArray(firstPage.data) ? firstPage.data : [])];
+  const allRawItems = [...firstPage.data];
 
   for (let page = 2; page <= totalPages; page += 1) {
     console.log(`Fetching AnimeTop page ${page}/${totalPages}`);
     const nextPage = await fetchAnimeTopPage(page);
-    if (Array.isArray(nextPage.data)) {
-      allRawItems.push(...nextPage.data);
-    }
+    allRawItems.push(...nextPage.data);
   }
 
   const uniqueItems = [];
   const seenIds = new Set();
+  let skipped = 0;
 
-  for (const rawItem of allRawItems) {
-    const id = String(rawItem.id);
+  for (const entry of allRawItems) {
+    const rawItem = parseAnimeTopItem(entry);
+    if (!rawItem) {
+      skipped += 1;
+      continue;
+    }
+    const id = rawItem.id;
     if (seenIds.has(id)) continue;
     seenIds.add(id);
     uniqueItems.push(rawItem);
+  }
+
+  if (skipped) {
+    console.warn(`Skipped ${skipped} invalid AnimeTop items.`);
   }
 
   const trendingContext = buildTrendingContext(uniqueItems);
@@ -461,13 +534,23 @@ async function fetchAniDubItems() {
   const rawItems = Array.isArray(payload) ? payload : [];
   const uniqueItems = [];
   const seenIds = new Set();
+  let skipped = 0;
 
-  for (const rawItem of rawItems) {
-    const id = String(rawItem.id ?? '').trim();
-    const title = String(rawItem.title ?? '').trim();
+  for (const entry of rawItems) {
+    const parsed = aniDubRawItemSchema.safeParse(entry);
+    if (!parsed.success) {
+      skipped += 1;
+      continue;
+    }
+    const id = parsed.data.id.trim();
+    const title = parsed.data.title.trim();
     if (!id || !title || seenIds.has(id)) continue;
     seenIds.add(id);
-    uniqueItems.push(rawItem);
+    uniqueItems.push(parsed.data);
+  }
+
+  if (skipped) {
+    console.warn(`Skipped ${skipped} invalid AniDub items.`);
   }
 
   return uniqueItems.map((rawItem, index) => ({

@@ -26,6 +26,7 @@ export function TitleCard({ title }: TitleCardProps) {
           component="img"
           image={title.poster}
           alt={title.title}
+          loading="lazy"
           sx={{ aspectRatio: '57 / 75', objectFit: 'cover' }}
         />
         <CardContent>

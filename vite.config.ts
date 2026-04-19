@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath, URL } from 'node:url';
 
 const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1];
 const pagesRepo = process.env.GITHUB_PAGES === 'true' ? repositoryName : undefined;
@@ -8,6 +9,11 @@ const base = pagesRepo && pagesRepo !== `${process.env.GITHUB_ACTOR}.github.io` 
 export default defineConfig({
   base,
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   build: {
     rollupOptions: {
       output: {

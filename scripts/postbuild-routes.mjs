@@ -15,12 +15,23 @@ async function ensureFileCopy(from, to) {
   await cp(from, to);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function injectMeta(template, title, description = 'Современный каталог аниме с новинками, поиском, избранным и встроенным плеером.') {
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
   return template
-    .replace(/<title>.*?<\/title>/i, `<title>${title}</title>`)
-    .replace(/<meta property="og:title" content=".*?"\s*\/>/i, `<meta property="og:title" content="${title}" />`)
-    .replace(/<meta property="og:description" content=".*?"\s*\/>/i, `<meta property="og:description" content="${description}" />`)
-    .replace(/<meta name="description" content=".*?"\s*\/>/i, `<meta name="description" content="${description}" />`)
+    .replace(/<title>.*?<\/title>/i, `<title>${safeTitle}</title>`)
+    .replace(/<meta property="og:title" content=".*?"\s*\/>/i, `<meta property="og:title" content="${safeTitle}" />`)
+    .replace(/<meta property="og:description" content=".*?"\s*\/>/i, `<meta property="og:description" content="${safeDescription}" />`)
+    .replace(/<meta name="description" content=".*?"\s*\/>/i, `<meta name="description" content="${safeDescription}" />`)
     .replace(/<meta property="og:type" content=".*?"\s*\/>/i, '<meta property="og:type" content="website" />');
 }
 

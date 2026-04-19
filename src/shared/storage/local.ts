@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { CatalogSourceId, CatalogTitle } from '../../entities/catalog';
 
 const STORAGE_VERSION = 3;
@@ -5,6 +6,35 @@ const FAVORITES_KEY = 'av-player:favorites';
 const HISTORY_KEY = 'av-player:history';
 const EPISODE_KEY = 'av-player:episodes';
 const PREFERRED_SOURCE_KEY = 'av-player:preferred-source';
+
+type Listener = () => void;
+const listeners = new Map<string, Set<Listener>>();
+
+function subscribe(key: string, listener: Listener): () => void {
+  let bucket = listeners.get(key);
+  if (!bucket) {
+    bucket = new Set();
+    listeners.set(key, bucket);
+  }
+  bucket.add(listener);
+  return () => {
+    bucket?.delete(listener);
+  };
+}
+
+function notify(key: string): void {
+  listeners.get(key)?.forEach((listener) => listener());
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (!event.key) {
+      listeners.forEach((_bucket, key) => notify(key));
+      return;
+    }
+    if (listeners.has(event.key)) notify(event.key);
+  });
+}
 
 interface VersionedStorage<T> {
   version: number;
@@ -136,6 +166,7 @@ function writeVersioned<T>(key: string, value: T): void {
     value,
   };
   window.localStorage.setItem(key, JSON.stringify(payload));
+  notify(key);
 }
 
 export function getTitleStorageIds(title: Pick<CatalogTitle, 'id' | 'sources'>): string[] {
@@ -228,4 +259,56 @@ export function setPreferredSourceId(titleId: string, sourceId: CatalogSourceId)
   const map = readVersioned<PreferredSourceMap>(PREFERRED_SOURCE_KEY, {});
   map[titleId] = sourceId;
   writeVersioned(PREFERRED_SOURCE_KEY, map);
+}
+
+const EMPTY_FAVORITES: FavoriteItem[] = [];
+const EMPTY_HISTORY: HistoryItem[] = [];
+
+let favoritesSnapshot: FavoriteItem[] | null = null;
+let favoritesSnapshotSerialized: string | null = null;
+let historySnapshot: HistoryItem[] | null = null;
+let historySnapshotSerialized: string | null = null;
+
+function refreshSnapshot<T>(
+  current: T | null,
+  currentSerialized: string | null,
+  next: T,
+): { value: T; serialized: string } {
+  const serialized = JSON.stringify(next);
+  if (current && currentSerialized === serialized) {
+    return { value: current, serialized: currentSerialized };
+  }
+  return { value: next, serialized };
+}
+
+function getFavoritesSnapshot(): FavoriteItem[] {
+  const next = getFavorites();
+  const { value, serialized } = refreshSnapshot(favoritesSnapshot, favoritesSnapshotSerialized, next);
+  favoritesSnapshot = value;
+  favoritesSnapshotSerialized = serialized;
+  return value;
+}
+
+function getHistorySnapshot(): HistoryItem[] {
+  const next = getHistory();
+  const { value, serialized } = refreshSnapshot(historySnapshot, historySnapshotSerialized, next);
+  historySnapshot = value;
+  historySnapshotSerialized = serialized;
+  return value;
+}
+
+export function useFavorites(): FavoriteItem[] {
+  return useSyncExternalStore(
+    (listener) => subscribe(FAVORITES_KEY, listener),
+    getFavoritesSnapshot,
+    () => EMPTY_FAVORITES,
+  );
+}
+
+export function useHistory(): HistoryItem[] {
+  return useSyncExternalStore(
+    (listener) => subscribe(HISTORY_KEY, listener),
+    getHistorySnapshot,
+    () => EMPTY_HISTORY,
+  );
 }
