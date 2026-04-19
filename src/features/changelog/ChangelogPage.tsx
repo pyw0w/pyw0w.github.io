@@ -36,7 +36,7 @@ export function ChangelogPage() {
           </Card>
 
           <Stack spacing={2}>
-            <Typography variant="h4">Последние изменения</Typography>
+            <Typography variant="h4" component="h2">Последние изменения</Typography>
             {changelogQuery.data.entries.length > 0 ? (
               <Stack spacing={2}>
                 {changelogQuery.data.entries.map((entry) => (
