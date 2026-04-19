@@ -38,6 +38,25 @@ function injectCatalogPreload(template, basePath) {
   return template.replace(/(<\/head>)/i, `${preload}$1`);
 }
 
+const IMAGE_ORIGIN_HINTS = ['https://static.openni.ru', 'https://isekai.anidub.fun'];
+
+function injectResourceHints(template) {
+  const hints = IMAGE_ORIGIN_HINTS
+    .filter((origin) => !template.includes(`href="${origin}"`))
+    .map((origin) => `    <link rel="preconnect" href="${origin}" crossorigin />\n    <link rel="dns-prefetch" href="${origin}" />`)
+    .join('\n');
+  if (!hints) return template;
+  return template.replace(/(<\/head>)/i, `${hints}\n  $1`);
+}
+
+function injectHeroPreload(template, heroPosterUrl) {
+  if (!heroPosterUrl) return template;
+  if (template.includes(`as="image"`) && template.includes(heroPosterUrl)) return template;
+  const safeUrl = escapeHtml(heroPosterUrl);
+  const preload = `    <link rel="preload" as="image" fetchpriority="high" href="${safeUrl}" />\n  `;
+  return template.replace(/(<\/head>)/i, `${preload}$1`);
+}
+
 function injectMeta(template, title, description = 'Современный каталог аниме с новинками, поиском, избранным и встроенным плеером.') {
   const safeTitle = escapeHtml(title);
   const safeDescription = escapeHtml(description);
@@ -49,7 +68,7 @@ function injectMeta(template, title, description = 'Современный ка�
     .replace(/<meta property="og:type" content=".*?"\s*\/>/i, '<meta property="og:type" content="website" />');
 }
 
-async function buildStaticShellRoutes(template) {
+async function buildStaticShellRoutes(template, heroPosterUrl) {
   const routes = [
     ['', 'AV Player — каталог аниме', 'Современный каталог аниме с новинками, поиском, избранным и встроенным плеером.'],
     ['search', 'Search — AV Player', 'Единый каталог аниме с поиском, фильтрами и сортировкой.'],
@@ -62,13 +81,14 @@ async function buildStaticShellRoutes(template) {
     routes.map(async ([route, title, description]) => {
       const routeDir = route ? join(distDir, route) : distDir;
       await mkdir(routeDir, { recursive: true });
-      await writeFile(join(routeDir, 'index.html'), injectMeta(template, title, description));
+      let shell = injectMeta(template, title, description);
+      if (route === '') shell = injectHeroPreload(shell, heroPosterUrl);
+      await writeFile(join(routeDir, 'index.html'), shell);
     }),
   );
 }
 
-async function buildTitleRoutes(template) {
-  const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
+async function buildTitleRoutes(template, catalog) {
   const prerenderTargets = catalog.items.slice(0, 120);
   const routeEntries = [];
 
@@ -115,11 +135,15 @@ async function buildTitleRoutes(template) {
 async function main() {
   const rawTemplate = await readFile(indexPath, 'utf8');
   const basePath = detectBasePath(rawTemplate);
-  const template = injectCatalogPreload(rawTemplate, basePath);
-  await writeFile(indexPath, template);
+  const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
+  const heroPosterUrl = catalog.items?.[0]?.poster ?? '';
+  let template = injectResourceHints(rawTemplate);
+  template = injectCatalogPreload(template, basePath);
+  const indexShell = injectHeroPreload(template, heroPosterUrl);
+  await writeFile(indexPath, indexShell);
   await ensureFileCopy(source404Path, dist404Path);
-  await buildStaticShellRoutes(template);
-  await buildTitleRoutes(template);
+  await buildStaticShellRoutes(template, heroPosterUrl);
+  await buildTitleRoutes(template, catalog);
 }
 
 main().catch((error) => {

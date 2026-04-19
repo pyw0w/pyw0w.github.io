@@ -7,3 +7,4 @@ node_modules
 skills-lock.json
 public/data/catalog.json
 public/data/changelog.json
+public/data/titles/

@@ -378,7 +378,11 @@ export function TitlePage() {
                         alt={detailQuery.data.title}
                         loading="lazy"
                         decoding="async"
-                        sx={{ width: '100%', borderRadius: 4, aspectRatio: '57 / 75', objectFit: 'cover' }}
+                        onError={(event) => {
+                          const target = event.currentTarget as HTMLImageElement;
+                          target.style.visibility = 'hidden';
+                        }}
+                        sx={{ width: '100%', borderRadius: 4, aspectRatio: '57 / 75', objectFit: 'cover', backgroundColor: 'background.paper' }}
                       />
                       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                         <Chip label={detailQuery.data.status} />
@@ -440,7 +444,7 @@ export function TitlePage() {
 
         {relatedQuery.data && relatedQuery.data.length > 0 ? (
           <Stack spacing={2}>
-            <Typography variant="h4">Похожие тайтлы</Typography>
+            <Typography variant="h4" component="h2">Похожие тайтлы</Typography>
             <TitleGrid titles={relatedQuery.data} />
           </Stack>
         ) : null}

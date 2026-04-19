@@ -27,7 +27,11 @@ export function TitleCard({ title }: TitleCardProps) {
           image={title.poster}
           alt={title.title}
           loading="lazy"
-          sx={{ aspectRatio: '57 / 75', objectFit: 'cover' }}
+          onError={(event) => {
+            const target = event.currentTarget as HTMLImageElement;
+            target.style.visibility = 'hidden';
+          }}
+          sx={{ aspectRatio: '57 / 75', objectFit: 'cover', backgroundColor: 'background.paper' }}
         />
         <CardContent>
           <Stack spacing={1.5}>
