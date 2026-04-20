@@ -56,6 +56,31 @@ const CYRILLIC_MAP = {
   к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
   х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
 };
+const GENRE_ALIASES = new Map([
+  ['боевые искусста', 'боевые искусства'],
+  ['боевые искусств', 'боевые искусства'],
+  ['повседневость', 'повседневность'],
+  ['приключение', 'приключения'],
+  ['прилкючения', 'приключения'],
+  ['роматика', 'романтика'],
+  ['романитка', 'романтика'],
+  ['сверхестественное', 'сверхъестественное'],
+  ['седзе', 'сёдзё'],
+  ['седзе аи', 'сёдзё-ай'],
+  ['сезде', 'сёдзё'],
+  ['сезде аи', 'сёдзё-ай'],
+  ['сенен', 'сёнэн'],
+  ['сенен аи', 'сёнэн-ай'],
+  ['сенэн', 'сёнэн'],
+  ['сенэн аи', 'сёнэн-ай'],
+  ['суперсила', 'супер сила'],
+  ['фантастик', 'фантастика'],
+  ['фентези', 'фэнтези'],
+  ['фэнтази', 'фэнтези'],
+  ['этии', 'этти'],
+  ['sci fi', 'Sci-Fi'],
+  ['scifi', 'Sci-Fi'],
+]);
 
 function ensureHttps(url) {
   if (!url) return '';
@@ -231,6 +256,29 @@ function buildSearchText(parts, maxLength = SEARCH_TEXT_MAX_LENGTH) {
   return lastSpace > maxLength * 0.6 ? clipped.slice(0, lastSpace) : clipped;
 }
 
+function normalizeGenreLabel(value) {
+  const trimmed = String(value ?? '')
+    .trim()
+    .replace(/[._]+$/g, '')
+    .replace(/\s+/g, ' ');
+
+  if (!trimmed) return '';
+
+  const normalizedKey = normalizeSearchText(trimmed);
+  if (!normalizedKey || normalizedKey === 'empty') return '';
+
+  return GENRE_ALIASES.get(normalizedKey) ?? trimmed.toLocaleLowerCase('ru-RU');
+}
+
+function parseGenres(value) {
+  const rawGenres = String(value ?? '')
+    .replace(/[;|/]+/g, ',')
+    .replace(/\.(?=\s*[A-Za-zА-Яа-яЁё0-9])/g, ',')
+    .split(',');
+
+  return uniqueStrings(rawGenres.map(normalizeGenreLabel));
+}
+
 function buildTitleId(sourceId, sourceTitleId) {
   return `${sourceId}-${sourceTitleId}`;
 }
@@ -239,10 +287,7 @@ function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
   const parsed = parseTitleParts(rawItem.title);
   const episodeStats = parseEpisodeStats(parsed.episodeLabel);
   const plainDescription = stripHtml(rawItem.description);
-  const genres = String(rawItem.genre ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const genres = parseGenres(rawItem.genre);
   const rating = Number(rawItem.rating) || 0;
   const votes = Number(rawItem.votes) || 0;
   const averageScore = computeAverageScore(rating, votes);
@@ -368,10 +413,7 @@ function normalizeAniDubItem(rawItem, latestRank) {
   const isAnnouncement = String(xfields.anons ?? '') === '1';
   const status = deriveAniDubStatus({ isAnnouncement, releasedEpisodes, totalEpisodes });
   const plainDescription = stripHtml(pickAniDubDescription(rawItem));
-  const genres = String(xfields.genre ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  const genres = parseGenres(xfields.genre);
   const originalTitle = String(xfields.orig_title ?? '').trim();
   const title = String(rawItem.title ?? '').trim();
   const sourceTitleId = String(rawItem.id);
