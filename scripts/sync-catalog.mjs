@@ -36,6 +36,76 @@ const aniDubRawItemSchema = z.object({
   xfields: z.string().catch(''),
 }).passthrough();
 
+const aniLibriaCatalogItemSchema = z.object({
+  id: z.union([z.string(), z.number()]).transform(String),
+  type: z.object({
+    value: z.string().catch(''),
+    description: z.string().catch(''),
+  }).passthrough(),
+  year: z.union([z.string(), z.number()]).transform(String).catch(''),
+  name: z.object({
+    main: z.string().catch(''),
+    english: z.string().nullable().catch(''),
+    alternative: z.string().nullable().catch(''),
+  }).passthrough(),
+  alias: z.string().catch(''),
+  season: z.object({
+    value: z.string().catch(''),
+    description: z.string().catch(''),
+  }).passthrough(),
+  poster: z.object({
+    src: z.string().catch(''),
+    preview: z.string().catch(''),
+    thumbnail: z.string().catch(''),
+    optimized: z.object({
+      src: z.string().catch(''),
+      preview: z.string().catch(''),
+      thumbnail: z.string().catch(''),
+    }).partial().catch({}),
+  }).passthrough(),
+  fresh_at: z.string().catch(''),
+  created_at: z.string().catch(''),
+  updated_at: z.string().catch(''),
+  is_ongoing: z.boolean().catch(false),
+  description: z.string().catch(''),
+  notification: z.string().nullable().catch(''),
+  episodes_total: z.union([z.string(), z.number()]).nullable().transform((value) => (
+    value === null || value === '' ? null : Number(value)
+  )).catch(null),
+  external_player: z.string().nullable().catch(''),
+  is_in_production: z.boolean().catch(false),
+  is_blocked_by_geo: z.boolean().catch(false),
+  is_blocked_by_copyrights: z.boolean().catch(false),
+  added_in_users_favorites: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  average_duration_of_episode: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  added_in_planned_collection: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  added_in_watched_collection: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  added_in_watching_collection: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  added_in_postponed_collection: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  added_in_abandoned_collection: z.union([z.string(), z.number()]).transform(Number).catch(0),
+  genres: z.array(z.object({
+    id: z.union([z.string(), z.number()]).transform(Number).catch(0),
+    name: z.string().catch(''),
+  }).passthrough()).catch([]),
+}).passthrough();
+
+const aniLibriaCatalogPageSchema = z.object({
+  data: z.array(z.unknown()).catch([]),
+  meta: z.object({
+    pagination: z.object({
+      total: z.union([z.string(), z.number()]).transform(Number).catch(0),
+      count: z.union([z.string(), z.number()]).transform(Number).catch(0),
+      per_page: z.union([z.string(), z.number()]).transform(Number).catch(0),
+      current_page: z.union([z.string(), z.number()]).transform(Number).catch(1),
+      total_pages: z.union([z.string(), z.number()]).transform(Number).catch(1),
+      links: z.object({
+        previous: z.string().optional(),
+        next: z.string().optional(),
+      }).partial().catch({}),
+    }).passthrough(),
+  }).passthrough(),
+}).passthrough();
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
 const outputPath = join(rootDir, 'public', 'data', 'catalog.json');
@@ -44,40 +114,47 @@ const titleDataDir = join(rootDir, 'public', 'data', 'titles');
 const ANIMETOP_API_BASE = 'https://api.animetop.info/v1';
 const ANIDUB_API_BASE = 'https://isekai.anidub.fun';
 const ANIDUB_SEARCH_URL = `${ANIDUB_API_BASE}/mobile-api.php?name=search&story=`;
+const ANILIBRIA_SITE_BASE = 'https://anilibria.top';
+const ANILIBRIA_API_BASE = `${ANILIBRIA_SITE_BASE}/api/v1`;
+const ANILIBRIA_CATALOG_PAGE_SIZE = 50;
 const PAGE_SIZE = 40;
-const STATUS_VALUES = ['Анонс', 'Онгоинг', 'Завершено'];
+const STATUS_VALUES = ['Р С’Р Р…Р С•Р Р…РЎРѓ', 'Р С›Р Р…Р С–Р С•Р С‘Р Р…Р С–', 'Р вЂ”Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р С•'];
 const TRENDING_MIN_VOTES = 50;
 const TRENDING_ONGOING_BOOST = 1.05;
-const TRUSTED_ANIDUB_PLAYER_HOSTS = new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']);
+const TRUSTED_EMBED_HOSTS_BY_SOURCE = {
+  animetop: new Set(),
+  anidub: new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']),
+  anilibria: new Set(),
+};
 const SEARCH_TEXT_MAX_LENGTH = 400;
 const SEARCH_DESCRIPTION_MAX_LENGTH = 240;
 const CYRILLIC_MAP = {
-  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
-  к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
-  х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  '\u0430': 'a', '\u0431': 'b', '\u0432': 'v', '\u0433': 'g', '\u0434': 'd', '\u0435': 'e', '\u0451': 'e', '\u0436': 'zh', '\u0437': 'z', '\u0438': 'i', '\u0439': 'y',
+  '\u043a': 'k', '\u043b': 'l', '\u043c': 'm', '\u043d': 'n', '\u043e': 'o', '\u043f': 'p', '\u0440': 'r', '\u0441': 's', '\u0442': 't', '\u0443': 'u', '\u0444': 'f',
+  '\u0445': 'h', '\u0446': 'ts', '\u0447': 'ch', '\u0448': 'sh', '\u0449': 'sch', '\u044a': '', '\u044b': 'y', '\u044c': '', '\u044d': 'e', '\u044e': 'yu', '\u044f': 'ya',
 };
 const GENRE_ALIASES = new Map([
-  ['боевые искусста', 'боевые искусства'],
-  ['боевые искусств', 'боевые искусства'],
-  ['повседневость', 'повседневность'],
-  ['приключение', 'приключения'],
-  ['прилкючения', 'приключения'],
-  ['роматика', 'романтика'],
-  ['романитка', 'романтика'],
-  ['сверхестественное', 'сверхъестественное'],
-  ['седзе', 'сёдзё'],
-  ['седзе аи', 'сёдзё-ай'],
-  ['сезде', 'сёдзё'],
-  ['сезде аи', 'сёдзё-ай'],
-  ['сенен', 'сёнэн'],
-  ['сенен аи', 'сёнэн-ай'],
-  ['сенэн', 'сёнэн'],
-  ['сенэн аи', 'сёнэн-ай'],
-  ['суперсила', 'супер сила'],
-  ['фантастик', 'фантастика'],
-  ['фентези', 'фэнтези'],
-  ['фэнтази', 'фэнтези'],
-  ['этии', 'этти'],
+  ['Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ Р С‘РЎРѓР С”РЎС“РЎРѓРЎРѓРЎвЂљР В°', 'Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ Р С‘РЎРѓР С”РЎС“РЎРѓРЎРѓРЎвЂљР Р†Р В°'],
+  ['Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ Р С‘РЎРѓР С”РЎС“РЎРѓРЎРѓРЎвЂљР Р†', 'Р В±Р С•Р ВµР Р†РЎвЂ№Р Вµ Р С‘РЎРѓР С”РЎС“РЎРѓРЎРѓРЎвЂљР Р†Р В°'],
+  ['Р С—Р С•Р Р†РЎРѓР ВµР Т‘Р Р…Р ВµР Р†Р С•РЎРѓРЎвЂљРЎРЉ', 'Р С—Р С•Р Р†РЎРѓР ВµР Т‘Р Р…Р ВµР Р†Р Р…Р С•РЎРѓРЎвЂљРЎРЉ'],
+  ['Р С—РЎР‚Р С‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С‘Р Вµ', 'Р С—РЎР‚Р С‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С‘РЎРЏ'],
+  ['Р С—РЎР‚Р С‘Р В»Р С”РЎР‹РЎвЂЎР ВµР Р…Р С‘РЎРЏ', 'Р С—РЎР‚Р С‘Р С”Р В»РЎР‹РЎвЂЎР ВµР Р…Р С‘РЎРЏ'],
+  ['РЎР‚Р С•Р СР В°РЎвЂљР С‘Р С”Р В°', 'РЎР‚Р С•Р СР В°Р Р…РЎвЂљР С‘Р С”Р В°'],
+  ['РЎР‚Р С•Р СР В°Р Р…Р С‘РЎвЂљР С”Р В°', 'РЎР‚Р С•Р СР В°Р Р…РЎвЂљР С‘Р С”Р В°'],
+  ['РЎРѓР Р†Р ВµРЎР‚РЎвЂ¦Р ВµРЎРѓРЎвЂљР ВµРЎРѓРЎвЂљР Р†Р ВµР Р…Р Р…Р С•Р Вµ', 'РЎРѓР Р†Р ВµРЎР‚РЎвЂ¦РЎР‰Р ВµРЎРѓРЎвЂљР ВµРЎРѓРЎвЂљР Р†Р ВµР Р…Р Р…Р С•Р Вµ'],
+  ['РЎРѓР ВµР Т‘Р В·Р Вµ', 'РЎРѓРЎвЂР Т‘Р В·РЎвЂ'],
+  ['РЎРѓР ВµР Т‘Р В·Р Вµ Р В°Р С‘', 'РЎРѓРЎвЂР Т‘Р В·РЎвЂ-Р В°Р в„–'],
+  ['РЎРѓР ВµР В·Р Т‘Р Вµ', 'РЎРѓРЎвЂР Т‘Р В·РЎвЂ'],
+  ['РЎРѓР ВµР В·Р Т‘Р Вµ Р В°Р С‘', 'РЎРѓРЎвЂР Т‘Р В·РЎвЂ-Р В°Р в„–'],
+  ['РЎРѓР ВµР Р…Р ВµР Р…', 'РЎРѓРЎвЂР Р…РЎРЊР Р…'],
+  ['РЎРѓР ВµР Р…Р ВµР Р… Р В°Р С‘', 'РЎРѓРЎвЂР Р…РЎРЊР Р…-Р В°Р в„–'],
+  ['РЎРѓР ВµР Р…РЎРЊР Р…', 'РЎРѓРЎвЂР Р…РЎРЊР Р…'],
+  ['РЎРѓР ВµР Р…РЎРЊР Р… Р В°Р С‘', 'РЎРѓРЎвЂР Р…РЎРЊР Р…-Р В°Р в„–'],
+  ['РЎРѓРЎС“Р С—Р ВµРЎР‚РЎРѓР С‘Р В»Р В°', 'РЎРѓРЎС“Р С—Р ВµРЎР‚ РЎРѓР С‘Р В»Р В°'],
+  ['РЎвЂћР В°Р Р…РЎвЂљР В°РЎРѓРЎвЂљР С‘Р С”', 'РЎвЂћР В°Р Р…РЎвЂљР В°РЎРѓРЎвЂљР С‘Р С”Р В°'],
+  ['РЎвЂћР ВµР Р…РЎвЂљР ВµР В·Р С‘', 'РЎвЂћРЎРЊР Р…РЎвЂљР ВµР В·Р С‘'],
+  ['РЎвЂћРЎРЊР Р…РЎвЂљР В°Р В·Р С‘', 'РЎвЂћРЎРЊР Р…РЎвЂљР ВµР В·Р С‘'],
+  ['РЎРЊРЎвЂљР С‘Р С‘', 'РЎРЊРЎвЂљРЎвЂљР С‘'],
   ['sci fi', 'Sci-Fi'],
   ['scifi', 'Sci-Fi'],
 ]);
@@ -85,6 +162,16 @@ const GENRE_ALIASES = new Map([
 function ensureHttps(url) {
   if (!url) return '';
   return String(url).replace(/^http:/i, 'https:');
+}
+
+function ensureAbsoluteUrl(baseUrl, url) {
+  if (!url) return '';
+
+  try {
+    return new URL(String(url), baseUrl).toString();
+  } catch {
+    return '';
+  }
 }
 
 function stripHtml(html = '') {
@@ -97,7 +184,7 @@ function stripHtml(html = '') {
 
 function truncateText(value, maxLength) {
   if (value.length <= maxLength) return value;
-  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trim()}РІР‚В¦`;
 }
 
 function decodeHtmlEntities(value = '') {
@@ -127,13 +214,13 @@ function decodeHtmlEntities(value = '') {
   });
 }
 
-function getTrustedAniDubPlayerUrl(url) {
+function getTrustedEmbedUrlForSource(sourceId, url) {
   if (!url) return '';
 
   try {
     const parsed = new URL(String(url).replace(/^http:/i, 'https:'));
     if (parsed.protocol !== 'https:') return '';
-    if (!TRUSTED_ANIDUB_PLAYER_HOSTS.has(parsed.host)) return '';
+    if (!TRUSTED_EMBED_HOSTS_BY_SOURCE[sourceId]?.has(parsed.host)) return '';
     return parsed.toString();
   } catch {
     return '';
@@ -161,7 +248,7 @@ function parseTitleParts(fullTitle) {
   const originalTitle = rawRest ? rawRest.split(' [')[0].trim() : '';
   const episodeLabel = bracketMatches[0] ?? '';
   const badges = bracketMatches.slice(1);
-  const isAnnouncement = String(fullTitle ?? '').includes('[Анонс]');
+  const isAnnouncement = String(fullTitle ?? '').includes('[Р С’Р Р…Р С•Р Р…РЎРѓ]');
 
   return {
     title: rawTitle.trim(),
@@ -173,7 +260,7 @@ function parseTitleParts(fullTitle) {
 }
 
 function parseEpisodeStats(episodeLabel) {
-  const match = String(episodeLabel).match(/(\d+)(?:-(\d+))?\s+из\s+(\d+)(\+)?/i);
+  const match = String(episodeLabel).match(/(\d+)(?:-(\d+))?\s+Р С‘Р В·\s+(\d+)(\+)?/i);
   if (!match) {
     return {
       releasedEpisodes: null,
@@ -194,13 +281,13 @@ function parseEpisodeStats(episodeLabel) {
 }
 
 function deriveStatus({ isAnnouncement, timer, releasedEpisodes, totalEpisodes, hasOpenEndedTotal }) {
-  if (isAnnouncement) return 'Анонс';
-  if (Number(timer) > 0) return 'Онгоинг';
-  if (hasOpenEndedTotal) return 'Онгоинг';
+  if (isAnnouncement) return '\u0410\u043d\u043e\u043d\u0441';
+  if (Number(timer) > 0) return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
+  if (hasOpenEndedTotal) return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
   if (releasedEpisodes !== null && totalEpisodes !== null && releasedEpisodes < totalEpisodes) {
-    return 'Онгоинг';
+    return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
   }
-  return 'Завершено';
+  return '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
 }
 
 function computeAverageScore(rating, votes) {
@@ -227,12 +314,12 @@ function buildTrendingContext(rawItems) {
 
 function computeTrendingScore({ averageScore, votes, status }, trendingContext) {
   const safeVotes = Number(votes) || 0;
-  if (!safeVotes || status === 'Анонс') return 0;
+  if (!safeVotes || status === 'Р С’Р Р…Р С•Р Р…РЎРѓ') return 0;
 
   const weightedRating = ((safeVotes / (safeVotes + trendingContext.minVotes)) * averageScore)
     + ((trendingContext.minVotes / (safeVotes + trendingContext.minVotes)) * trendingContext.globalMean);
   const voteBoost = Math.log10(safeVotes + 1);
-  const statusBoost = status === 'Онгоинг' ? TRENDING_ONGOING_BOOST : 1;
+  const statusBoost = status === 'Р С›Р Р…Р С–Р С•Р С‘Р Р…Р С–' ? TRENDING_ONGOING_BOOST : 1;
 
   return Number((weightedRating * voteBoost * statusBoost).toFixed(3));
 }
@@ -243,7 +330,7 @@ function normalizeSearchText(value) {
     .trim()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^0-9a-zа-яё]+/gi, ' ')
+    .replace(/[^0-9a-zР В°-РЎРЏРЎвЂ]+/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -273,7 +360,7 @@ function normalizeGenreLabel(value) {
 function parseGenres(value) {
   const rawGenres = String(value ?? '')
     .replace(/[;|/]+/g, ',')
-    .replace(/\.(?=\s*[A-Za-zА-Яа-яЁё0-9])/g, ',')
+    .replace(/\.(?=\s*[\p{L}\p{N}])/gu, ',')
     .split(',');
 
   return uniqueStrings(rawGenres.map(normalizeGenreLabel));
@@ -281,6 +368,12 @@ function parseGenres(value) {
 
 function buildTitleId(sourceId, sourceTitleId) {
   return `${sourceId}-${sourceTitleId}`;
+}
+
+function parseOptionalNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
@@ -338,6 +431,61 @@ function normalizeAnimeTopItem(rawItem, latestRank, trendingContext) {
   };
 }
 
+function deriveAniLibriaStatus(rawItem) {
+  if (rawItem.is_ongoing || rawItem.is_in_production) return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
+  return '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
+}
+
+function deriveAniLibriaEpisodeLabel(totalEpisodes) {
+  if (totalEpisodes === null) return '';
+  return `${totalEpisodes} Р РЋР РЉР В РЎвЂ”.`;
+}
+
+function normalizeAniLibriaItem(rawItem, latestRank) {
+  const totalEpisodes = parseOptionalNumber(rawItem.episodes_total);
+  const genres = uniqueStrings(rawItem.genres.map((genre) => normalizeGenreLabel(genre.name)));
+  const title = String(rawItem.name.main ?? '').trim();
+  const originalTitle = String(rawItem.name.english ?? rawItem.name.alternative ?? '').trim();
+  const description = stripHtml(rawItem.description);
+  const type = String(rawItem.type.description || rawItem.type.value || '').trim();
+
+  return {
+    id: buildTitleId('anilibria', rawItem.id),
+    sourceId: 'anilibria',
+    sourceTitleId: rawItem.id,
+    slug: String(rawItem.alias ?? '').trim() || slugify(originalTitle || title, rawItem.id),
+    title,
+    originalTitle,
+    episodeLabel: deriveAniLibriaEpisodeLabel(totalEpisodes),
+    year: String(rawItem.year ?? '').trim(),
+    genres,
+    type,
+    director: '',
+    poster: ensureAbsoluteUrl(ANILIBRIA_SITE_BASE, rawItem.poster.optimized?.src || rawItem.poster.src || rawItem.poster.preview),
+    shortDescription: truncateText(description, 240),
+    rating: 0,
+    votes: 0,
+    averageScore: 0,
+    trendingScore: 0,
+    timer: 0,
+    isAnnouncement: false,
+    status: deriveAniLibriaStatus(rawItem),
+    releasedEpisodes: null,
+    totalEpisodes,
+    latestRank,
+    searchText: buildSearchText([
+      title,
+      originalTitle,
+      rawItem.name.alternative,
+      genres.join(' '),
+      type,
+      rawItem.year,
+      rawItem.season.description,
+      description.slice(0, SEARCH_DESCRIPTION_MAX_LENGTH),
+    ]),
+  };
+}
+
 function parseAniDubXfields(input = '') {
   const result = {};
   const parts = decodeHtmlEntities(input).split('||').filter(Boolean);
@@ -364,32 +512,32 @@ function inferAniDubType(title, xfields) {
   const originalTitle = String(xfields.orig_title ?? '').toLowerCase();
   const combined = `${normalizedTitle} ${originalTitle}`;
 
-  if (/\bmovie\b|фильм/.test(combined)) return 'Фильм';
+  if (/\bmovie\b|РЎвЂћР С‘Р В»РЎРЉР С/.test(combined)) return 'Р В¤Р С‘Р В»РЎРЉР С';
   if (/\bova\b/.test(combined)) return 'OVA';
   if (/\bona\b/.test(combined)) return 'ONA';
-  if (/special|спэшл|спецвыпуск/.test(combined)) return 'Спешл';
-  return 'ТВ';
+  if (/special|РЎРѓР С—РЎРЊРЎв‚¬Р В»|РЎРѓР С—Р ВµРЎвЂ Р Р†РЎвЂ№Р С—РЎС“РЎРѓР С”/.test(combined)) return 'Р РЋР С—Р ВµРЎв‚¬Р В»';
+  return 'Р СћР вЂ™';
 }
 
 function deriveAniDubEpisodeLabel(releasedEpisodes, totalEpisodes) {
   if (releasedEpisodes !== null && totalEpisodes !== null) {
-    return `${releasedEpisodes} из ${totalEpisodes}`;
+    return `${releasedEpisodes} Р С‘Р В· ${totalEpisodes}`;
   }
   if (releasedEpisodes !== null) {
-    return `${releasedEpisodes} серия`;
+    return `${releasedEpisodes} РЎРѓР ВµРЎР‚Р С‘РЎРЏ`;
   }
   if (totalEpisodes !== null) {
-    return `0 из ${totalEpisodes}`;
+    return `0 Р С‘Р В· ${totalEpisodes}`;
   }
   return '';
 }
 
 function deriveAniDubStatus({ isAnnouncement, releasedEpisodes, totalEpisodes }) {
-  if (isAnnouncement) return 'Анонс';
+  if (isAnnouncement) return 'Р С’Р Р…Р С•Р Р…РЎРѓ';
   if (releasedEpisodes !== null && totalEpisodes !== null && releasedEpisodes < totalEpisodes) {
-    return 'Онгоинг';
+    return 'Р С›Р Р…Р С–Р С•Р С‘Р Р…Р С–';
   }
-  return 'Завершено';
+  return 'Р вЂ”Р В°Р Р†Р ВµРЎР‚РЎв‚¬Р ВµР Р…Р С•';
 }
 
 function buildAniDubPosterUrl(xfields) {
@@ -457,13 +605,13 @@ function normalizeAniDubItem(rawItem, latestRank) {
 
 function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.id) {
   const xfields = parseAniDubXfields(rawItem.xfields);
-  const playerUrl = getTrustedAniDubPlayerUrl(decodeHtmlEntities(xfields.playerfull ?? ''));
+  const playerUrl = getTrustedEmbedUrlForSource('anidub', decodeHtmlEntities(xfields.playerfull ?? ''));
   const hasEmbeddedPlayer = Boolean(playerUrl);
   const playbackMessage = hasEmbeddedPlayer
     ? undefined
     : xfields.player1
-      ? 'Для этого релиза AniDub использует внешний защищённый плеер, который нельзя встроить в static-версии сайта.'
-      : 'Видео для этого релиза пока недоступно.';
+      ? 'Р вЂќР В»РЎРЏ РЎРЊРЎвЂљР С•Р С–Р С• РЎР‚Р ВµР В»Р С‘Р В·Р В° AniDub Р С‘РЎРѓР С—Р С•Р В»РЎРЉР В·РЎС“Р ВµРЎвЂљ Р Р†Р Р…Р ВµРЎв‚¬Р Р…Р С‘Р в„– Р В·Р В°РЎвЂ°Р С‘РЎвЂ°РЎвЂР Р…Р Р…РЎвЂ№Р в„– Р С—Р В»Р ВµР ВµРЎР‚, Р С”Р С•РЎвЂљР С•РЎР‚РЎвЂ№Р в„– Р Р…Р ВµР В»РЎРЉР В·РЎРЏ Р Р†РЎРѓРЎвЂљРЎР‚Р С•Р С‘РЎвЂљРЎРЉ Р Р† static-Р Р†Р ВµРЎР‚РЎРѓР С‘Р С‘ РЎРѓР В°Р в„–РЎвЂљР В°.'
+      : 'Р вЂ™Р С‘Р Т‘Р ВµР С• Р Т‘Р В»РЎРЏ РЎРЊРЎвЂљР С•Р С–Р С• РЎР‚Р ВµР В»Р С‘Р В·Р В° Р С—Р С•Р С”Р В° Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р Р…Р С•.';
 
   return {
     description: pickAniDubDescription(rawItem),
@@ -474,7 +622,7 @@ function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.
       ? [
         {
           id: `${titleId}-player`,
-          name: normalizedItem.episodeLabel || 'Плеер AniDub',
+          name: normalizedItem.episodeLabel || 'Р СџР В»Р ВµР ВµРЎР‚ AniDub',
           hd: '',
           std: '',
           preview: normalizedItem.poster,
@@ -482,6 +630,33 @@ function buildAniDubTitleData(rawItem, normalizedItem, titleId = normalizedItem.
         },
       ]
       : [],
+  };
+}
+
+function buildAniLibriaTitleData(rawItem) {
+  const playerUrl = getTrustedEmbedUrlForSource('anilibria', rawItem.external_player ?? '');
+  const hasExternalPlayer = Boolean(rawItem.external_player);
+  const playbackUnsupported = Boolean(
+    rawItem.is_blocked_by_geo
+      || rawItem.is_blocked_by_copyrights
+      || (hasExternalPlayer && !playerUrl),
+  );
+
+  let playbackMessage;
+  if (rawItem.is_blocked_by_geo) {
+    playbackMessage = 'Р В  Р В Р’ВµР В Р’В»Р В РЎвЂР В Р’В· AniLibria Р В РЎвЂўР В РЎвЂ“Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦ Р В РЎвЂ”Р В РЎвЂў Р В РЎвЂ“Р В Р’ВµР В РЎвЂўР В Р’В»Р В РЎвЂўР В РЎвЂќР В Р’В°Р РЋРІР‚В Р В РЎвЂР В РЎвЂ.';
+  } else if (rawItem.is_blocked_by_copyrights) {
+    playbackMessage = 'Р В  Р В Р’ВµР В Р’В»Р В РЎвЂР В Р’В· AniLibria Р В Р вЂ¦Р В Р’ВµР В РўвЂР В РЎвЂўР РЋР С“Р РЋРІР‚С™Р РЋРЎвЂњР В РЎвЂ”Р В Р’ВµР В Р вЂ¦ Р В РЎвЂР В Р’В·-Р В Р’В·Р В Р’В° Р В РЎвЂўР В РЎвЂ“Р РЋР вЂљР В Р’В°Р В Р вЂ¦Р В РЎвЂР РЋРІР‚РЋР В Р’ВµР В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂ”Р РЋР вЂљР В Р’В°Р В Р вЂ Р В РЎвЂўР В РЎвЂўР В Р’В±Р В Р’В»Р В Р’В°Р В РўвЂР В Р’В°Р РЋРІР‚С™Р В Р’ВµР В Р’В»Р РЋР РЏ.';
+  } else if (hasExternalPlayer && !playerUrl) {
+    playbackMessage = 'AniLibria Р В Р вЂ Р В Р’ВµР РЋР вЂљР В Р вЂ¦Р РЋРЎвЂњР В Р’В» Р В Р вЂ Р В Р вЂ¦Р В Р’ВµР РЋРІвЂљВ¬Р В Р вЂ¦Р В РЎвЂР В РІвЂћвЂ“ Р В РЎвЂ”Р В Р’В»Р В Р’ВµР В Р’ВµР РЋР вЂљ, Р В РЎвЂќР В РЎвЂўР РЋРІР‚С™Р В РЎвЂўР РЋР вЂљР РЋРІР‚в„–Р В РІвЂћвЂ“ Р В РЎвЂ”Р В РЎвЂўР В РЎвЂќР В Р’В° Р В Р вЂ¦Р В Р’Вµ Р В Р вЂ Р РЋРІР‚В¦Р В РЎвЂўР В РўвЂР В РЎвЂР РЋРІР‚С™ Р В Р вЂ  trusted allowlist static-Р В Р вЂ Р В Р’ВµР РЋР вЂљР РЋР С“Р В РЎвЂР В РЎвЂ.';
+  }
+
+  return {
+    description: rawItem.description ?? '',
+    playerUrl: playerUrl || undefined,
+    playbackUnsupported: playbackUnsupported || undefined,
+    playbackMessage,
+    playlist: [],
   };
 }
 
@@ -521,6 +696,15 @@ async function fetchAnimeTopPage(page) {
   const parsed = animeTopPageSchema.safeParse(payload);
   if (!parsed.success) {
     throw new Error(`Invalid AnimeTop response for page ${page}: ${parsed.error.message}`);
+  }
+  return parsed.data;
+}
+
+async function fetchAniLibriaCatalogPage(page) {
+  const payload = await fetchJson(`${ANILIBRIA_API_BASE}/anime/catalog/releases?limit=${ANILIBRIA_CATALOG_PAGE_SIZE}&page=${page}`);
+  const parsed = aniLibriaCatalogPageSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error(`Invalid AniLibria response for page ${page}: ${parsed.error.message}`);
   }
   return parsed.data;
 }
@@ -600,6 +784,46 @@ async function fetchAniDubItems() {
   }));
 }
 
+async function fetchAniLibriaItems() {
+  const firstPage = await fetchAniLibriaCatalogPage(1);
+  const totalPages = Math.max(1, Number(firstPage.meta?.pagination?.total_pages) || 1);
+  const allRawItems = [...firstPage.data];
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    console.log(`Fetching AniLibria catalog page ${page}/${totalPages}`);
+    const nextPage = await fetchAniLibriaCatalogPage(page);
+    allRawItems.push(...nextPage.data);
+  }
+
+  const uniqueItems = [];
+  const seenIds = new Set();
+  let skipped = 0;
+
+  for (const entry of allRawItems) {
+    const parsed = aniLibriaCatalogItemSchema.safeParse(entry);
+    if (!parsed.success) {
+      skipped += 1;
+      continue;
+    }
+
+    const id = parsed.data.id.trim();
+    const title = parsed.data.name.main.trim();
+    if (!id || !title || seenIds.has(id)) continue;
+
+    seenIds.add(id);
+    uniqueItems.push(parsed.data);
+  }
+
+  if (skipped) {
+    console.warn(`Skipped ${skipped} invalid AniLibria items.`);
+  }
+
+  return uniqueItems.map((rawItem, index) => ({
+    rawItem,
+    normalized: normalizeAniLibriaItem(rawItem, index),
+  }));
+}
+
 function buildCanonicalMergeKey(item) {
   const originalTitle = normalizeSearchText(item.originalTitle);
   const year = normalizeSearchText(item.year);
@@ -620,11 +844,21 @@ function addToMapArray(map, key, value) {
 }
 
 function getProviderSortRank(item) {
-  return (item.latestRank * 2) + (item.sourceId === 'animetop' ? 0 : 1);
+  return (item.latestRank * 4) + getSourcePriority(item);
+}
+
+function getSourcePriority(item) {
+  if (item.sourceId === 'animetop') return 0;
+  if (item.sourceId === 'anilibria') return 1;
+  if (item.sourceId === 'anidub') return 2;
+  return 3;
 }
 
 function choosePrimaryItem(items) {
-  return items.find((item) => item.sourceId === 'animetop') ?? items[0];
+  return [...items].sort((left, right) => (
+    getSourcePriority(left) - getSourcePriority(right)
+      || getProviderSortRank(left) - getProviderSortRank(right)
+  ))[0];
 }
 
 function uniqueStrings(values) {
@@ -680,33 +914,30 @@ function buildCanonicalItem(items) {
   };
 }
 
-function buildCanonicalGroups(animeTopItems, aniDubItems) {
-  const animeTopByKey = new Map();
-  const aniDubByKey = new Map();
-
-  animeTopItems.forEach((item) => addToMapArray(animeTopByKey, buildCanonicalMergeKey(item), item));
-  aniDubItems.forEach((item) => addToMapArray(aniDubByKey, buildCanonicalMergeKey(item), item));
-
-  const usedIds = new Set();
+function buildCanonicalGroups(items) {
+  const itemsByKey = new Map();
   const groups = [];
 
-  for (const [key, animeTopMatches] of animeTopByKey) {
-    const aniDubMatches = aniDubByKey.get(key);
-    if (animeTopMatches.length !== 1 || !aniDubMatches || aniDubMatches.length !== 1) continue;
-
-    const [animeTopItem] = animeTopMatches;
-    const [aniDubItem] = aniDubMatches;
-    usedIds.add(animeTopItem.id);
-    usedIds.add(aniDubItem.id);
-    groups.push([animeTopItem, aniDubItem]);
+  for (const item of items) {
+    const key = buildCanonicalMergeKey(item);
+    if (!key) {
+      groups.push([item]);
+      continue;
+    }
+    addToMapArray(itemsByKey, key, item);
   }
 
-  for (const item of animeTopItems) {
-    if (!usedIds.has(item.id)) groups.push([item]);
-  }
+  for (const groupedItems of itemsByKey.values()) {
+    const groupedBySource = new Map();
+    groupedItems.forEach((item) => addToMapArray(groupedBySource, item.sourceId, item));
 
-  for (const item of aniDubItems) {
-    if (!usedIds.has(item.id)) groups.push([item]);
+    const hasDuplicateSource = [...groupedBySource.values()].some((entries) => entries.length > 1);
+    if (hasDuplicateSource) {
+      groupedItems.forEach((item) => groups.push([item]));
+      continue;
+    }
+
+    groups.push(groupedItems);
   }
 
   return groups
@@ -729,14 +960,21 @@ async function writeAniDubTitleData(entries) {
 
 async function main() {
   console.log('Syncing merged catalog snapshot...');
-  const [animeTopItems, aniDubEntries] = await Promise.all([
+  const [animeTopItems, aniDubEntries, aniLibriaItems] = await Promise.all([
     fetchAnimeTopItems(),
     fetchAniDubItems(),
+    fetchAniLibriaItems(),
   ]);
 
   const aniDubItems = aniDubEntries.map((entry) => entry.normalized);
   const aniDubEntriesByLegacyId = new Map(aniDubEntries.map((entry) => [entry.normalized.id, entry]));
-  const groups = buildCanonicalGroups(animeTopItems, aniDubItems);
+  const aniLibriaNormalizedItems = aniLibriaItems.map((entry) => entry.normalized);
+  const aniLibriaEntriesByLegacyId = new Map(aniLibriaItems.map((entry) => [entry.normalized.id, entry]));
+  const groups = buildCanonicalGroups([
+    ...animeTopItems,
+    ...aniDubItems,
+    ...aniLibriaNormalizedItems,
+  ]);
   const groupedItems = groups.map((groupItems) => ({
     item: buildCanonicalItem(groupItems),
     groupItems,
@@ -757,17 +995,26 @@ async function main() {
   };
 
   const titleDataEntries = groupedItems.flatMap(({ item }) => {
+    const sources = {};
     const aniDubSource = item.sources.find((source) => source.sourceId === 'anidub');
-    if (!aniDubSource) return [];
+    if (aniDubSource) {
+      const aniDubEntry = aniDubEntriesByLegacyId.get(aniDubSource.legacyTitleId);
+      if (aniDubEntry) {
+        sources.anidub = buildAniDubTitleData(aniDubEntry.rawItem, aniDubEntry.normalized, item.id);
+      }
+    }
 
-    const aniDubEntry = aniDubEntriesByLegacyId.get(aniDubSource.legacyTitleId);
-    if (!aniDubEntry) return [];
+    const aniLibriaSource = item.sources.find((source) => source.sourceId === 'anilibria');
+    if (aniLibriaSource) {
+      const aniLibriaEntry = aniLibriaEntriesByLegacyId.get(aniLibriaSource.legacyTitleId);
+      if (aniLibriaEntry) {
+        sources.anilibria = buildAniLibriaTitleData(aniLibriaEntry.rawItem);
+      }
+    }
 
-    return [[item.id, {
-      sources: {
-        anidub: buildAniDubTitleData(aniDubEntry.rawItem, aniDubEntry.normalized, item.id),
-      },
-    }]];
+    if (Object.keys(sources).length === 0) return [];
+
+    return [[item.id, { sources }]];
   });
 
   await mkdir(dirname(outputPath), { recursive: true });
@@ -775,7 +1022,7 @@ async function main() {
   await writeAniDubTitleData(titleDataEntries);
 
   console.log(`Saved ${items.length} titles to ${outputPath}`);
-  console.log(`Saved ${titleDataEntries.length} AniDub title payloads to ${titleDataDir}`);
+  console.log(`Saved ${titleDataEntries.length} static title payloads to ${titleDataDir}`);
 }
 
 main().catch((error) => {

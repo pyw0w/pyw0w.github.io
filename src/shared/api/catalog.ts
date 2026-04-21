@@ -16,9 +16,34 @@ import { parseTitleRouteParam } from '../lib/routes';
 const ANIMETOP_API_BASE = 'https://api.animetop.info/v1';
 const PAGE_SIZE = 24;
 const CATALOG_SORT_VALUES: CatalogParams['sort'][] = ['latest', 'trending', 'rating'];
-const STATUS_VALUES: TitleStatus[] = ['Анонс', 'Онгоинг', 'Завершено'];
-const titleStatusSchema = z.enum(['Анонс', 'Онгоинг', 'Завершено']);
-const catalogSourceIdSchema = z.enum(['animetop', 'anidub']);
+const STATUS_VALUES: TitleStatus[] = ['\u0410\u043d\u043e\u043d\u0441', '\u041e\u043d\u0433\u043e\u0438\u043d\u0433', '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e'];
+const catalogSourceIdSchema = z.enum(['animetop', 'anidub', 'anilibria']);
+
+function normalizeTitleStatusValue(value: string): TitleStatus {
+  if (value === '\u0410\u043d\u043e\u043d\u0441' || value === '\u0420\u0452\u0420\u0405\u0420\u0455\u0420\u0405\u0421\u0453') {
+    return '\u0410\u043d\u043e\u043d\u0441';
+  }
+  if (value === '\u041e\u043d\u0433\u043e\u0438\u043d\u0433' || value === '\u0420\u045b\u0420\u0405\u0420\u0456\u0420\u0455\u0420\u0451\u0420\u0405\u0420\u0456') {
+    return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
+  }
+  if (value === '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e' || value === '\u0420\u2014\u0420\u00b0\u0420\u0406\u0420\u00b5\u0421\u0402\u0421\u20ac\u0420\u00b5\u0420\u0405\u0420\u0455') {
+    return '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
+  }
+
+  throw new Error(`Unknown title status: ${value}`);
+}
+
+const titleStatusSchema = z.string().transform((value, context): TitleStatus => {
+  try {
+    return normalizeTitleStatusValue(value);
+  } catch {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid title status: ${value}`,
+    });
+    return z.NEVER;
+  }
+});
 
 export const DEFAULT_CATALOG_PARAMS: CatalogParams = {
   page: 1,
@@ -148,6 +173,7 @@ const staticSourceDataSchema = z.object({
 const staticTitleSourcesSchema = z.object({
   animetop: staticSourceDataSchema.optional(),
   anidub: staticSourceDataSchema.optional(),
+  anilibria: staticSourceDataSchema.optional(),
 });
 
 const staticTitleDataSchema = z.union([
@@ -160,6 +186,7 @@ const staticTitleDataSchema = z.union([
     sources: {
       animetop: undefined,
       anidub: sourceData,
+      anilibria: undefined,
     },
   })),
 ]);
@@ -169,8 +196,12 @@ interface StaticTitleData {
   sources: {
     animetop?: StaticSourceData;
     anidub?: StaticSourceData;
+    anilibria?: StaticSourceData;
   };
 }
+
+type SourceDetailLoader = (summary: CatalogTitle, source: CatalogTitleSource) => Promise<TitleDetail>;
+type SourcePlaylistLoader = (summary: CatalogTitle, source: CatalogTitleSource) => Promise<PlaylistEpisode[]>;
 
 let snapshotPromise: Promise<CatalogSnapshot> | null = null;
 const staticTitleDataPromises = new Map<string, Promise<StaticTitleData>>();
@@ -205,7 +236,7 @@ function normalizeSearchText(value: string): string {
     .trim()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^0-9a-zа-яё]+/gi, ' ')
+    .replace(/[^0-9a-zР В°-РЎРЏРЎвЂ]+/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -324,9 +355,9 @@ async function getStaticTitleData(titleId: string): Promise<StaticTitleData> {
 }
 
 function getStaticSourceData(payload: StaticTitleData, sourceId: CatalogSourceId): StaticSourceData | undefined {
-  return sourceId === 'animetop'
-    ? payload.sources.animetop
-    : payload.sources.anidub;
+  if (sourceId === 'animetop') return payload.sources.animetop;
+  if (sourceId === 'anidub') return payload.sources.anidub;
+  return payload.sources.anilibria;
 }
 
 function compareTrending(left: CatalogTitle, right: CatalogTitle): number {
@@ -599,6 +630,27 @@ async function getAniDubTitleDetail(summary: CatalogTitle, source: CatalogTitleS
   };
 }
 
+async function getAniLibriaTitleDetail(summary: CatalogTitle, source: CatalogTitleSource): Promise<TitleDetail> {
+  const selectedSummary = applySelectedSourceSummary(summary, source);
+  const detailPayload = await getStaticTitleData(summary.id);
+  const detail = getStaticSourceData(detailPayload, source.sourceId);
+
+  return {
+    ...selectedSummary,
+    selectedSourceId: source.sourceId,
+    description: detail?.description ?? '',
+    playerUrl: detail?.playerUrl,
+    playbackUnsupported: detail?.playbackUnsupported,
+    playbackMessage: detail?.playbackMessage,
+  };
+}
+
+const titleDetailLoaders: Record<CatalogSourceId, SourceDetailLoader> = {
+  animetop: getAnimeTopTitleDetail,
+  anidub: getAniDubTitleDetail,
+  anilibria: getAniLibriaTitleDetail,
+};
+
 export async function getTitleDetail(id: string, preferredSourceId?: CatalogSourceId | null): Promise<TitleDetail> {
   const summary = await getTitleSummary(id);
 
@@ -611,11 +663,7 @@ export async function getTitleDetail(id: string, preferredSourceId?: CatalogSour
     throw new Error('Title source not found');
   }
 
-  if (source.sourceId === 'anidub') {
-    return getAniDubTitleDetail(summary, source);
-  }
-
-  return getAnimeTopTitleDetail(summary, source);
+  return titleDetailLoaders[source.sourceId](summary, source);
 }
 
 async function getAnimeTopPlaylist(_summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
@@ -648,6 +696,18 @@ async function getAniDubPlaylist(summary: CatalogTitle, source: CatalogTitleSour
   return detail?.playlist ?? [];
 }
 
+async function getAniLibriaPlaylist(summary: CatalogTitle, source: CatalogTitleSource): Promise<PlaylistEpisode[]> {
+  const detailPayload = await getStaticTitleData(summary.id);
+  const detail = getStaticSourceData(detailPayload, source.sourceId);
+  return detail?.playlist ?? [];
+}
+
+const playlistLoaders: Record<CatalogSourceId, SourcePlaylistLoader> = {
+  animetop: getAnimeTopPlaylist,
+  anidub: getAniDubPlaylist,
+  anilibria: getAniLibriaPlaylist,
+};
+
 export async function getPlaylist(id: string, preferredSourceId?: CatalogSourceId | null): Promise<PlaylistEpisode[]> {
   const summary = await getTitleSummary(id);
 
@@ -660,11 +720,7 @@ export async function getPlaylist(id: string, preferredSourceId?: CatalogSourceI
     throw new Error('Title source not found');
   }
 
-  if (source.sourceId === 'anidub') {
-    return getAniDubPlaylist(summary, source);
-  }
-
-  return getAnimeTopPlaylist(summary, source);
+  return playlistLoaders[source.sourceId](summary, source);
 }
 
 export async function getRelatedTitles(title: CatalogTitle, limit = 8): Promise<CatalogTitle[]> {

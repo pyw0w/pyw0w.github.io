@@ -21,7 +21,7 @@ export function parseTitleRouteParam(sourceId: string | undefined, value: string
       };
     }
 
-    if (sourceId !== 'animetop' && sourceId !== 'anidub') return null;
+    if (sourceId !== 'animetop' && sourceId !== 'anidub' && sourceId !== 'anilibria') return null;
     if (!canonicalMatch[1].startsWith(`${sourceId}-`)) return null;
 
     return {

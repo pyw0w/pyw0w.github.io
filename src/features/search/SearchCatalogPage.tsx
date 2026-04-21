@@ -28,7 +28,7 @@ import {
   normalizeCatalogParams,
   parseCatalogSearchParams,
 } from '../../shared/api/catalog';
-import { trackEvent } from '../../shared/analytics/events';
+import { trackEvent } from '../../shared/telemetry/events';
 import { useDebouncedValue } from '../../shared/lib/useDebouncedValue';
 import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';

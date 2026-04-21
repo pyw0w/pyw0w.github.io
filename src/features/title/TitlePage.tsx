@@ -21,7 +21,7 @@ import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { useParams } from 'react-router-dom';
 import type { CatalogSourceId } from '../../entities/catalog';
 import { getCatalogSnapshot, getPlaylist, getRelatedTitles, getTitleDetail, resolveTitleRoute } from '../../shared/api/catalog';
-import { trackEvent } from '../../shared/analytics/events';
+import { trackEvent } from '../../shared/telemetry/events';
 import { formatGenres, formatScore, sanitizeHtml } from '../../shared/lib/text';
 import {
   getPreferredSourceId,
@@ -37,19 +37,40 @@ import { PageShell } from '../../shared/ui/PageShell';
 import { TitleGrid } from '../../shared/ui/TitleGrid';
 import { CatalogFreshness } from '../../shared/ui/CatalogFreshness';
 
-const TRUSTED_EMBED_HOSTS = new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']);
+const TRUSTED_EMBED_HOSTS_BY_SOURCE: Record<CatalogSourceId, Set<string>> = {
+  animetop: new Set(),
+  anidub: new Set(['isekai.anidub.fun', 'player.ladonyvesna2005.info']),
+  anilibria: new Set(),
+};
 
-function getSourceLabel(sourceId: CatalogSourceId): string {
-  return sourceId === 'anidub' ? 'AniDub' : 'AnimeTop';
+function hasDirectVideoSources(episode: { hd: string; std: string } | undefined): boolean {
+  return Boolean(episode?.hd || episode?.std);
 }
 
-function getTrustedEmbedUrl(url: string | undefined): string {
+function isEmbeddedPlaybackOnly(
+  sourceId: CatalogSourceId | null,
+  playlist: Array<{ playerUrl?: string; hd: string; std: string }> | undefined,
+  detailPlayerUrl: string | undefined,
+): boolean {
+  if (!sourceId) return false;
+  if (playlist && playlist.some((episode) => hasDirectVideoSources(episode))) return false;
+  return Boolean(detailPlayerUrl || playlist?.some((episode) => Boolean(episode.playerUrl)));
+}
+
+function getSourceLabel(sourceId: CatalogSourceId): string {
+  if (sourceId === 'anidub') return 'AniDub';
+  if (sourceId === 'anilibria') return 'AniLibria';
+  return 'AnimeTop';
+}
+
+function getTrustedEmbedUrl(url: string | undefined, sourceId: CatalogSourceId | null): string {
   if (!url) return '';
+  if (!sourceId) return '';
 
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:') return '';
-    if (!TRUSTED_EMBED_HOSTS.has(parsed.host)) return '';
+    if (!TRUSTED_EMBED_HOSTS_BY_SOURCE[sourceId].has(parsed.host)) return '';
     return parsed.toString();
   } catch {
     return '';
@@ -134,7 +155,13 @@ export function TitlePage() {
   useEffect(() => {
     if (!playlistQuery.data || !detailQuery.data || !selectedSourceId) return;
 
-    if (selectedSourceId === 'anidub') {
+    const embeddedOnlyPlayback = isEmbeddedPlaybackOnly(
+      selectedSourceId,
+      playlistQuery.data,
+      detailQuery.data.playerUrl,
+    );
+
+    if (embeddedOnlyPlayback) {
       setSelectedEpisodeState(playlistQuery.data[0]?.id ?? null);
       return;
     }
@@ -166,8 +193,13 @@ export function TitlePage() {
   const previousEpisode = currentEpisodeIndex > 0 ? playlistQuery.data?.[currentEpisodeIndex - 1] ?? null : null;
   const nextEpisode = currentEpisodeIndex >= 0 ? playlistQuery.data?.[currentEpisodeIndex + 1] ?? null : null;
   const rawPlayerUrl = currentEpisode?.playerUrl ?? detailQuery.data?.playerUrl ?? '';
-  const currentPlayerUrl = getTrustedEmbedUrl(rawPlayerUrl);
+  const currentPlayerUrl = getTrustedEmbedUrl(rawPlayerUrl, detailQuery.data?.selectedSourceId ?? selectedSourceId);
   const hasUnsafePlayerUrl = Boolean(rawPlayerUrl) && !currentPlayerUrl;
+  const embeddedOnlyPlayback = isEmbeddedPlaybackOnly(
+    detailQuery.data?.selectedSourceId ?? selectedSourceId,
+    playlistQuery.data,
+    detailQuery.data?.playerUrl,
+  );
   const playbackUnsupported = Boolean(currentEpisode?.playbackUnsupported || detailQuery.data?.playbackUnsupported || hasUnsafePlayerUrl);
   const playbackMessage = currentEpisode?.playbackMessage
     || detailQuery.data?.playbackMessage
@@ -176,7 +208,7 @@ export function TitlePage() {
       : 'Видео пока недоступно.');
 
   function selectEpisode(episodeId: string) {
-    if (!detailQuery.data || !selectedSourceId || selectedSourceId === 'anidub') return;
+    if (!detailQuery.data || !selectedSourceId || embeddedOnlyPlayback) return;
     setSelectedEpisodeState(episodeId);
     setSelectedEpisode(detailQuery.data.id, selectedSourceId, episodeId);
   }
@@ -297,13 +329,13 @@ export function TitlePage() {
                 </Card>
               ) : null}
 
-              {detailQuery.data.selectedSourceId === 'anidub' && currentPlayerUrl ? (
+              {embeddedOnlyPlayback && currentPlayerUrl ? (
                 <Alert severity="info" sx={{ mt: 3 }}>
                   Переключение серий для AniDub доступно внутри встроенного плеера.
                 </Alert>
               ) : null}
 
-              {playlistQuery.data && playlistQuery.data.length > 0 && detailQuery.data.selectedSourceId !== 'anidub' ? (
+              {playlistQuery.data && playlistQuery.data.length > 0 && !embeddedOnlyPlayback ? (
                 <Card sx={{ mt: 3 }}>
                   <CardContent>
                     <Stack spacing={2}>

@@ -1,5 +1,5 @@
-export type TitleStatus = 'Анонс' | 'Онгоинг' | 'Завершено';
-export type CatalogSourceId = 'animetop' | 'anidub';
+export type TitleStatus = '\u0410\u043d\u043e\u043d\u0441' | '\u041e\u043d\u0433\u043e\u0438\u043d\u0433' | '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
+export type CatalogSourceId = 'animetop' | 'anidub' | 'anilibria';
 
 export interface CatalogTitleSource {
   sourceId: CatalogSourceId;
