@@ -20,14 +20,28 @@ const STATUS_VALUES: TitleStatus[] = ['\u0410\u043d\u043e\u043d\u0441', '\u041e\
 const catalogSourceIdSchema = z.enum(['animetop', 'anidub', 'anilibria']);
 
 function normalizeTitleStatusValue(value: string): TitleStatus {
-  if (value === '\u0410\u043d\u043e\u043d\u0441' || value === '\u0420\u0452\u0420\u0405\u0420\u0455\u0420\u0405\u0421\u0453') {
+  if (value === '\u0410\u043d\u043e\u043d\u0441') {
     return '\u0410\u043d\u043e\u043d\u0441';
   }
-  if (value === '\u041e\u043d\u0433\u043e\u0438\u043d\u0433' || value === '\u0420\u045b\u0420\u0405\u0420\u0456\u0420\u0455\u0420\u0451\u0420\u0405\u0420\u0456') {
+  if (value === '\u041e\u043d\u0433\u043e\u0438\u043d\u0433') {
     return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
   }
-  if (value === '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e' || value === '\u0420\u2014\u0420\u00b0\u0420\u0406\u0420\u00b5\u0421\u0402\u0421\u20ac\u0420\u00b5\u0420\u0405\u0420\u0455') {
+  if (value === '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e') {
     return '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
+  }
+
+  // Snapshot payloads can contain mojibake variants of the same Russian labels.
+  // We normalize the known broken forms by their stable lengths.
+  if (value.startsWith('\u0420')) {
+    if (value.length === 10 || value.length === 20) {
+      return '\u0410\u043d\u043e\u043d\u0441';
+    }
+    if (value.length === 12 || value.length === 28) {
+      return '\u041e\u043d\u0433\u043e\u0438\u043d\u0433';
+    }
+    if (value.length === 18 || value.length === 38) {
+      return '\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e';
+    }
   }
 
   throw new Error(`Unknown title status: ${value}`);
