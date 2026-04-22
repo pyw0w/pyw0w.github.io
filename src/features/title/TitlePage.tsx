@@ -21,7 +21,7 @@ import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { useParams } from 'react-router-dom';
 import type { CatalogSourceId } from '../../entities/catalog';
 import { getCatalogSnapshot, getPlaylist, getRelatedTitles, getTitleDetail, resolveTitleRoute } from '../../shared/api/catalog';
-import { trackEvent } from '../../shared/analytics/events';
+import { trackEvent } from '../../shared/telemetry/events';
 import { formatGenres, formatScore, sanitizeHtml } from '../../shared/lib/text';
 import {
   getPreferredSourceId,
