@@ -33,18 +33,13 @@ async function loadPage(url) {
 
     if (newMain) {
       main.innerHTML = newMain.innerHTML;
-      document.title = doc.title;
     }
-
+    document.title = doc.title;
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    reinitPage();
+
+    // Re-init page-specific JS
+    await import('./app.js').then(m => m.initPage());
   } catch {
     window.location.href = url;
-  }
-}
-
-function reinitPage() {
-  if (window.location.pathname.includes('catalog')) {
-    import('./search.js').then(m => m.initSearch('searchInput', 'catalogGrid'));
   }
 }

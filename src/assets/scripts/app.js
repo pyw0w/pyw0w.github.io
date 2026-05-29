@@ -4,7 +4,7 @@ import { initSearch } from './search.js';
 import { fetchList } from './api.js';
 import { renderCards, showLoader, getFromStorage, addToArrayStorage, removeFromArrayStorage } from './utils.js';
 
-document.addEventListener('DOMContentLoaded', async () => {
+export async function initPage() {
   initTheme();
 
   const isCatalog = window.location.pathname.includes('catalog');
@@ -18,15 +18,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (isCatalog) {
     initSearch('searchInput', 'catalogGrid');
     await loadCatalog();
+  } else if (isHome || isAnime) {
+    initSearch('searchInput', null);
   }
 
   if (isAnime) {
     await loadAnimeDetail();
   }
+}
 
-  if (!isCatalog) {
-    initRouter();
-  }
+document.addEventListener('DOMContentLoaded', async () => {
+  await initPage();
+  initRouter();
 });
 
 async function loadHomePage() {
