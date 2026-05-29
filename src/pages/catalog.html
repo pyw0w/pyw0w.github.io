@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/assets/css/main.css" />
+  <title>Каталог — GulpAnime</title>
+</head>
+<body>
+  @@include('../includes/header.html')
+
+  <main class="page">
+    <div class="container">
+      <div class="filters" id="filters">
+        <select class="filter-select" id="filterGenre">
+          <option value="">Все жанры</option>
+        </select>
+        <select class="filter-select" id="filterYear">
+          <option value="">Все года</option>
+        </select>
+        <select class="filter-select" id="filterStatus">
+          <option value="">Любой статус</option>
+          <option value="ongoing">Онгоинг</option>
+          <option value="released">Вышел</option>
+        </select>
+      </div>
+
+      <div class="card-grid" id="catalogGrid">
+        <!-- JS fills this -->
+      </div>
+
+      <div class="load-more">
+        <button class="btn btn-primary" id="loadMoreBtn">Загрузить ещё</button>
+      </div>
+    </div>
+  </main>
+
+  @@include('../includes/footer.html')
+
+  <script src="/assets/js/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/assets/css/main.css" />
+  <title>GulpAnime</title>
+</head>
+<body>
+  @@include('../includes/header.html')
+
+  <main class="page">
+    <div class="container">
+      <h2 class="section-title">Популярное</h2>
+      <div class="card-grid" id="popularGrid">
+        <!-- JS fills this -->
+      </div>
+
+      <h2 class="section-title">Недавно добавленные</h2>
+      <div class="card-grid" id="recentGrid">
+        <!-- JS fills this -->
+      </div>
+    </div>
+  </main>
+
+  @@include('../includes/footer.html')
+
+  <script src="/assets/js/app.js" type="module"></script>
+</body>
+</html>
