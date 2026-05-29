@@ -1,0 +1,26 @@
+{
+  "name": "gulpanime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Anime catalog site with PWA",
+  "scripts": {
+    "build": "gulp build",
+    "dev": "gulp watch",
+    "data": "gulp data"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "browser-sync": "^3.0.0",
+    "gulp": "^5.0.0",
+    "gulp-autoprefixer": "^9.0.0",
+    "gulp-babel": "^8.0.0",
+    "gulp-clean-css": "^4.3.0",
+    "gulp-concat": "^2.6.1",
+    "gulp-file-include": "^2.3.0",
+    "gulp-htmlmin": "^5.0.1",
+    "gulp-sass": "^5.1.0",
+    "gulp-uglify": "^3.0.2",
+    "sass": "^1.77.0"
+  }
+}
