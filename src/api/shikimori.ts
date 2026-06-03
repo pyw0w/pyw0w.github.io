@@ -1,21 +1,16 @@
 import { config } from '../config';
+import type { ShikimoriAnime } from './types';
 
 const SHIKIMORI_PROXY = `${config.workerUrl}/shikimori`;
 
-async function graphql<T>(query: string, variables?: Record<string, unknown>, token?: string): Promise<T> {
-  const res = await fetch(`${SHIKIMORI_PROXY}/graphql`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
-  if (json.errors?.length) throw new Error(json.errors[0].message);
-  if (!json.data) throw new Error('Empty GraphQL response');
-  return json.data;
+async function fetchAnimes(params: Record<string, string>): Promise<ShikimoriAnime[]> {
+  const qs = new URLSearchParams(params);
+  const res = await fetch(`${SHIKIMORI_PROXY}/animes?${qs}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message ?? `animes -> ${res.status}`);
+  }
+  return res.json() as Promise<ShikimoriAnime[]>;
 }
 
 async function userRates(
@@ -43,4 +38,4 @@ async function whoami(token: string): Promise<{ id: number; nickname: string }> 
   return res.json() as Promise<{ id: number; nickname: string }>;
 }
 
-export const shikimori = { graphql, userRates, whoami };
+export const shikimori = { fetchAnimes, userRates, whoami };

@@ -10,7 +10,7 @@ export interface StreamResult {
 }
 
 export interface ShikimoriAnime {
-  id: string;
+  id: number | string;
   name: string;
   russian: string | null;
   image: { original: string | null; preview: string | null };

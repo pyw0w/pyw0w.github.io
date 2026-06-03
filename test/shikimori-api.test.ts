@@ -3,22 +3,22 @@ import { shikimori } from '../src/api/shikimori';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('shikimori.graphql', () => {
-  it('posts a query and returns data', async () => {
-    let body = '';
-    vi.stubGlobal('fetch', vi.fn(async (_u: string, init: any) => {
-      body = String(init.body);
-      return new Response(JSON.stringify({ data: { animes: [{ id: '1', name: 'X' }] } }), { status: 200 });
+describe('shikimori.fetchAnimes', () => {
+  it('sends params and returns mapped data', async () => {
+    let url = '';
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => {
+      url = u;
+      return new Response(JSON.stringify([{ id: 52991, name: 'X', episodesAired: 27 }]), { status: 200 });
     }));
-    const data = await shikimori.graphql<{ animes: any[] }>('query{animes{id}}');
-    expect(body).toContain('animes');
-    expect(data.animes[0].id).toBe('1');
+    const data = await shikimori.fetchAnimes({ order: 'ranked', limit: '30', kind: 'tv' });
+    expect(url).toContain('order=ranked');
+    expect(data[0].id).toBe(52991);
   });
 
-  it('throws on graphql errors', async () => {
+  it('throws on non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
-      new Response(JSON.stringify({ errors: [{ message: 'bad' }] }), { status: 200 })));
-    await expect(shikimori.graphql('query{}')).rejects.toThrow('bad');
+      new Response(JSON.stringify({ message: 'bad' }), { status: 502 })));
+    await expect(shikimori.fetchAnimes({})).rejects.toThrow('bad');
   });
 });
 
