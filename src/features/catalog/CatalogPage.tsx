@@ -1,20 +1,22 @@
-import { Link } from 'react-router-dom';
 import { useCatalog } from '../../api/queries';
+import { AnimeCard } from '../../components/AnimeCard';
+import { PosterGridSkeleton } from '../../components/Skeleton';
+import { ErrorMessage } from '../../components/ErrorMessage';
 
 export default function CatalogPage() {
-  const { data, isLoading, error } = useCatalog();
-  if (isLoading) return <p>Загрузка…</p>;
-  if (error) return <p>Ошибка загрузки каталога</p>;
+  const { data, isLoading, error, refetch } = useCatalog();
+
+  if (isLoading) return <PosterGridSkeleton count={18} />;
+  if (error || !data) return <ErrorMessage message="Не удалось загрузить каталог" retry={() => refetch()} />;
+
   return (
-    <ul style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 12, listStyle: 'none', padding: 0 }}>
-      {data!.map((a) => (
-        <li key={a.id}>
-          <Link to={`/anime/${a.id}`}>
-            {a.image.preview && <img src={`https://shikimori.io${a.image.preview}`} alt="" style={{ width: '100%' }} />}
-            <div>{a.russian ?? a.name}</div>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div>
+      <h1 className="text-lg font-semibold mb-4">Каталог</h1>
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+        {data.map((anime) => (
+          <AnimeCard key={anime.id} anime={anime} />
+        ))}
+      </div>
+    </div>
   );
 }

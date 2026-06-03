@@ -15,5 +15,5 @@ it('prompts to log in when unauthenticated', () => {
       </AuthProvider>
     </QueryClientProvider>,
   );
-  expect(screen.getByText(/Войдите через Shikimori/)).toBeInTheDocument();
+  expect(screen.getByText(/Войдите в аккаунт/)).toBeInTheDocument();
 });

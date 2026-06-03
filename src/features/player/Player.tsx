@@ -36,5 +36,13 @@ export function Player({ manifest, startAt = 0, onTime }: PlayerProps) {
     };
   }, [manifest, startAt, onTime]);
 
-  return <video data-testid="video" ref={videoRef} controls playsInline style={{ width: '100%' }} />;
+  return (
+    <video
+      data-testid="video"
+      ref={videoRef}
+      controls
+      playsInline
+      className="w-full aspect-video bg-black"
+    />
+  );
 }

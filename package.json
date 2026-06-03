@@ -11,11 +11,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.2.9",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.40.0",
     "hls.js": "^1.5.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.23.0",
+    "tailwindcss": "^4.3.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
