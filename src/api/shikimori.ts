@@ -1,9 +1,9 @@
 import { config } from '../config';
 
-const GRAPHQL_URL = `${config.shikimoriApiBase}/api/graphql`;
+const SHIKIMORI_PROXY = `${config.workerUrl}/shikimori`;
 
 async function graphql<T>(query: string, variables?: Record<string, unknown>, token?: string): Promise<T> {
-  const res = await fetch(GRAPHQL_URL, {
+  const res = await fetch(`${SHIKIMORI_PROXY}/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -28,7 +28,7 @@ async function userRates(
       return a;
     }, {}),
   );
-  const res = await fetch(`${config.shikimoriApiBase}/api/v2/user_rates?${q}`, {
+  const res = await fetch(`${SHIKIMORI_PROXY}/user_rates?${q}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
   if (!res.ok) throw new Error(`user_rates -> ${res.status}`);
@@ -36,7 +36,7 @@ async function userRates(
 }
 
 async function whoami(token: string): Promise<{ id: number; nickname: string }> {
-  const res = await fetch(`${config.shikimoriApiBase}/api/users/whoami`, {
+  const res = await fetch(`${SHIKIMORI_PROXY}/whoami`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
   if (!res.ok) throw new Error('whoami failed');
